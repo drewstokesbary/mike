@@ -122,7 +122,7 @@ app.use("/download", downloadsRouter);
 app.get("/health", (_req, res) => res.json({ ok: true }));
 
 // ChatGPT code
-const HOST = "0.0.0.0";
+const HOST = process.env.HOST ?? "0.0.0.0";
 app.listen(PORT, HOST, () => {
   console.log(`Mike backend running on ${HOST}:${PORT}`);
 });
