@@ -4,17 +4,25 @@ import { useState, useRef, useEffect } from "react";
 import { MoreHorizontal, Pencil, Trash2, Check, X } from "lucide-react";
 import {
     DropdownMenu,
-    DropdownMenuContent,
-    DropdownMenuItem,
     DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+} from "@/app/components/ui/dropdown-menu";
+import {
+    LiquidDropdownContent,
+    LiquidDropdownItem,
+} from "@/app/components/ui/liquid-dropdown";
 import { useChatHistoryContext } from "@/app/contexts/ChatHistoryContext";
-import { useAuth } from "@/contexts/AuthContext";
-import { OwnerOnlyModal } from "@/app/components/shared/OwnerOnlyModal";
-import type { MikeChat } from "@/app/components/shared/types";
+import { useAuth } from "@/app/contexts/AuthContext";
+import { OwnerOnlyPopup } from "@/app/components/popups/OwnerOnlyPopup";
+import type { Chat } from "@/app/components/shared/types";
+import { ChatSkeuoIcon } from "@/app/components/shared/AppSidebarSkeuoIcons";
+import { cn } from "@/app/lib/utils";
+import {
+    APP_SURFACE_ACTIVE_CLASS,
+    APP_SURFACE_HOVER_CLASS,
+} from "@/app/components/ui/liquid-surface";
 
 interface Props {
-    chat: MikeChat;
+    chat: Chat;
     isActive: boolean;
     onSelect: () => void;
     projectName?: string;
@@ -48,9 +56,12 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
 
     return (
         <div
-            className={`group relative flex items-center w-full h-9 rounded-md transition-colors ${
-                isActive ? "bg-gray-100" : "hover:bg-gray-100"
-            }`}
+            className={cn(
+                "group relative flex h-8 w-full items-center rounded-md transition-colors",
+                isActive
+                    ? `${APP_SURFACE_ACTIVE_CLASS} pr-1`
+                    : `pr-3 ${APP_SURFACE_HOVER_CLASS} hover:pr-1`,
+            )}
         >
             {isRenaming ? (
                 <div className="flex items-center w-full px-2 py-1">
@@ -80,6 +91,7 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
                 </div>
             ) : (
                 <>
+                    <ChatSkeuoIcon className="ml-2.5 h-3.5 w-3.5 shrink-0" />
                     <button
                         onClick={onSelect}
                         onMouseEnter={(e) => {
@@ -90,9 +102,12 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
                         onMouseLeave={(e) => {
                             e.currentTarget.scrollTo({ left: 0, behavior: "smooth" });
                         }}
-                        className={`flex-1 min-w-0 text-left px-3 py-2 text-xs overflow-x-hidden whitespace-nowrap scrollbar-none ${
-                            isActive ? "text-gray-900" : "text-gray-700"
-                        }`}
+                        className={cn(
+                            "min-w-0 flex-1 overflow-x-hidden whitespace-nowrap scrollbar-none py-1 pl-2 text-left text-xs",
+                            isActive
+                                ? "pr-3 text-gray-900"
+                                : "pr-0 text-gray-700 group-hover:pr-3",
+                        )}
                         title={projectName ? `${projectName}: ${chat.title ?? "Untitled chat"}` : (chat.title ?? "Untitled chat")}
                     >
                         {projectName && (
@@ -104,17 +119,17 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
                     <DropdownMenu>
                         <DropdownMenuTrigger asChild>
                             <button
-                                className={`p-1 mr-1 text-gray-500 transition-opacity hover:text-gray-900 ${
+                                className={`flex h-6 w-0 shrink-0 items-center justify-center overflow-hidden rounded-md bg-transparent text-gray-500 opacity-0 transition-opacity hover:text-gray-900 ${
                                     isActive
-                                        ? "opacity-100"
-                                        : "opacity-0 group-hover:opacity-100"
+                                        ? "w-6 opacity-100"
+                                        : "pointer-events-none group-hover:w-6 group-hover:pointer-events-auto group-hover:opacity-100"
                                 }`}
                             >
                                 <MoreHorizontal className="h-4 w-4" />
                             </button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="z-101">
-                            <DropdownMenuItem
+                        <LiquidDropdownContent align="end" className="z-101">
+                            <LiquidDropdownItem
                                 onClick={() => {
                                     if (!isChatOwner) {
                                         setOwnerOnlyAction("rename this chat");
@@ -126,8 +141,8 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
                             >
                                 <Pencil className="mr-2 h-4 w-4" />
                                 Rename
-                            </DropdownMenuItem>
-                            <DropdownMenuItem
+                            </LiquidDropdownItem>
+                            <LiquidDropdownItem
                                 onClick={() => {
                                     if (!isChatOwner) {
                                         setOwnerOnlyAction("delete this chat");
@@ -139,12 +154,12 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
                             >
                                 <Trash2 className="mr-2 h-4 w-4" />
                                 Delete
-                            </DropdownMenuItem>
-                        </DropdownMenuContent>
+                            </LiquidDropdownItem>
+                        </LiquidDropdownContent>
                     </DropdownMenu>
                 </>
             )}
-            <OwnerOnlyModal
+            <OwnerOnlyPopup
                 open={!!ownerOnlyAction}
                 action={ownerOnlyAction ?? undefined}
                 onClose={() => setOwnerOnlyAction(null)}
