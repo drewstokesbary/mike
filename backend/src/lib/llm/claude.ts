@@ -20,6 +20,11 @@ type NativeMessage = {
 };
 
 const MAX_TOKENS = 16384;
+const SHORT_PROMPT_CACHE_CONTROL = { type: "ephemeral" } as const;
+const CONVERSATION_PROMPT_CACHE_CONTROL = {
+  type: "ephemeral",
+  ttl: "1h",
+} as const;
 
 function apiKey(override?: string | null): string {
   const key = override?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || "";
@@ -129,6 +134,7 @@ export async function streamClaude(
       throwIfAborted(params.abortSignal);
       const stream = anthropic.messages.stream({
         model,
+        cache_control: CONVERSATION_PROMPT_CACHE_CONTROL,
         system: systemPrompt,
         messages: messages as Anthropic.MessageParam[],
         tools: claudeTools.length
@@ -277,6 +283,7 @@ export async function completeClaudeText(params: {
   try {
     resp = await anthropic.messages.create({
       model: params.model,
+      cache_control: SHORT_PROMPT_CACHE_CONTROL,
       max_tokens: params.maxTokens ?? 512,
       system: params.systemPrompt,
       messages: [{ role: "user", content: params.user }],
