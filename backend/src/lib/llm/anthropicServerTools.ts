@@ -23,7 +23,6 @@ export const ANTHROPIC_WEB_TOOLS: ToolUnion[] = [
       country: "US",
       timezone: "America/Los_Angeles",
     },
-    cache_control: { type: "ephemeral" },
   },
   {
     type: "web_fetch_20250910",
@@ -31,7 +30,6 @@ export const ANTHROPIC_WEB_TOOLS: ToolUnion[] = [
     max_uses: 8,
     max_content_tokens: 50_000,
     citations: { enabled: true },
-    cache_control: { type: "ephemeral" },
   },
 ];
 

@@ -56,6 +56,9 @@ intentionally differs from `upstream/main`.
   fetch tools; fetched-source citations are enabled; legal research prioritizes
   primary government/court sources and CourtListener, while secondary sources
   remain available as fallback.
+- Cache invariant: server-tool definitions must not introduce their own
+  default five-minute cache markers after Mike has selected the conversation's
+  one-hour cache policy; Anthropic rejects mixed TTLs in that order.
 - Upstream interaction: provider protocol and research policy stay in new
   provider-specific modules. Shared adapter changes remain a callback plus an
   optional result field. Web sources extend Mike's citation UI rather than

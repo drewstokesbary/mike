@@ -1,8 +1,18 @@
 import { describe, expect, it } from "vitest";
 import type { ContentBlock } from "@anthropic-ai/sdk/resources/messages/messages";
-import { extractWebCitations, serverToolName } from "./anthropicServerTools";
+import {
+  ANTHROPIC_WEB_TOOLS,
+  extractWebCitations,
+  serverToolName,
+} from "./anthropicServerTools";
 
 describe("Anthropic server tools", () => {
+  it("leaves cache control to the conversation-level one-hour policy", () => {
+    for (const tool of ANTHROPIC_WEB_TOOLS) {
+      expect(tool).not.toHaveProperty("cache_control");
+    }
+  });
+
   it("recognizes web server tool calls", () => {
     expect(serverToolName({ type: "server_tool_use", id: "1", name: "web_search", input: {}, caller: { type: "direct" } })).toBe("web_search");
   });
