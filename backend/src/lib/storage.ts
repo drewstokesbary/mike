@@ -1,4 +1,13 @@
-/** S3-compatible storage utilities for Mike document management. */
+/**
+ * Cloudflare R2 storage utilities for Mike document management.
+ * R2 is S3-compatible — uses @aws-sdk/client-s3.
+ *
+ * Required env vars:
+ *   R2_ENDPOINT_URL     — https://<account-id>.r2.cloudflarestorage.com
+ *   R2_ACCESS_KEY_ID    — R2 API token (Access Key ID)
+ *   R2_SECRET_ACCESS_KEY — R2 API token (Secret Access Key)
+ *   R2_BUCKET_NAME      — bucket name (default: "mike")
+ */
 
 import {
   S3Client,
@@ -13,58 +22,33 @@ const GetObjectCommand = (S3Commands as any).GetObjectCommand;
 
 let cachedClient: S3Client | undefined;
 
-export type StorageConfig = {
-  endpoint: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  bucket: string;
-  region: string;
-};
-
-/** Prefer provider-neutral names, with R2 variables as a legacy fallback. */
-export function resolveStorageConfig(
-  env: NodeJS.ProcessEnv = process.env,
-): StorageConfig | null {
-  const endpoint = env.STORAGE_ENDPOINT_URL || env.R2_ENDPOINT_URL || "";
-  const accessKeyId = env.STORAGE_ACCESS_KEY_ID || env.R2_ACCESS_KEY_ID || "";
-  const secretAccessKey =
-    env.STORAGE_SECRET_ACCESS_KEY || env.R2_SECRET_ACCESS_KEY || "";
-  if (!endpoint || !accessKeyId || !secretAccessKey) return null;
-  return {
-    endpoint,
-    accessKeyId,
-    secretAccessKey,
-    bucket: env.STORAGE_BUCKET_NAME || env.R2_BUCKET_NAME || "mike",
-    region: env.STORAGE_REGION || env.R2_REGION || "auto",
-  };
-}
-
 function getClient(): S3Client {
   if (!cachedClient) {
-    const config = resolveStorageConfig();
-    if (!config) throw new Error("S3-compatible storage is not configured");
     cachedClient = new S3Client({
-      region: config.region,
-      endpoint: config.endpoint,
+      region: "auto",
+      endpoint: process.env.R2_ENDPOINT_URL!,
       forcePathStyle: true,
       credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
+        accessKeyId: process.env.R2_ACCESS_KEY_ID!,
+        secretAccessKey: process.env.R2_SECRET_ACCESS_KEY!,
       },
     });
   }
   return cachedClient;
 }
 
-const storageConfig = resolveStorageConfig();
-const BUCKET = storageConfig?.bucket ?? "mike";
+const BUCKET = process.env.R2_BUCKET_NAME ?? "mike";
 
-export const storageEnabled = storageConfig !== null;
+export const storageEnabled = Boolean(
+  process.env.R2_ENDPOINT_URL &&
+  process.env.R2_ACCESS_KEY_ID &&
+  process.env.R2_SECRET_ACCESS_KEY,
+);
 
 function requireStorageConfig(): void {
   if (!storageEnabled) {
     throw new Error(
-      "Set STORAGE_ENDPOINT_URL, STORAGE_ACCESS_KEY_ID, and STORAGE_SECRET_ACCESS_KEY (or the legacy R2 equivalents)",
+      "R2_ENDPOINT_URL, R2_ACCESS_KEY_ID, and R2_SECRET_ACCESS_KEY must be set",
     );
   }
 }

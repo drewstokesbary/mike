@@ -66,23 +66,7 @@ intentionally differs from `upstream/main`.
 - Validation: SDK protocol unit tests, web-citation UI tests, TypeScript builds,
   and backend/frontend suites. Re-check tool versions when upgrading the SDK.
 
-### Provider-neutral S3 storage configuration
-
-- Files: `backend/src/lib/storage.ts`, `backend/.env.example`, and
-  `backend/scripts/migrate-s3-storage.ts`.
-- Invariant: `STORAGE_*` config selects any S3-compatible provider with an
-  explicit region; legacy `R2_*` variables remain a complete fallback. Object
-  keys and all application storage operations are unchanged.
-- Reason: permit a staged, reversible move from Cloudflare R2 to the private
-  `mike` bucket in the CABW Supabase project without provider logic spreading
-  through document code.
-- Upstream interaction: keep all provider selection behind `storage.ts` and
-  preserve its public upload/download/list/delete/signed-URL API.
-- Validation: config unit tests; live temporary-object upload, download, list,
-  signed-URL, and delete checks; source/destination count, size, and SHA-256
-  verification before Render cutover.
-
-#### Storage rollout record (2026-08-11)
+## Deployment configuration note: Supabase Storage
 
 - CABW project `orzoqismohtjgdjhuypy` has a private `mike` bucket with 227
   objects totaling 145,696,740 bytes.
@@ -91,16 +75,21 @@ intentionally differs from `upstream/main`.
   unreferenced and were intentionally left untouched.
 - A temporary-object test passed upload, byte-identical download, prefix list,
   signed URL (HTTP 200), and deletion against the Supabase S3 endpoint.
-- The local backend already targets that endpoint through legacy `R2_*` names.
-- Do not delete the R2 bucket or declare source/destination hash parity until
-  old R2 credentials are made available to `storage:migrate` for comparison.
+- Bucket and object timestamps show this deployment has used Supabase Storage
+  since its initial setup; there is no evidence of a separate Cloudflare R2
+  bucket or an object migration.
+- Mike's unchanged upstream storage adapter uses generic S3 operations but
+  legacy `R2_*` environment-variable names. In this deployment those variables
+  contain Supabase S3 endpoint and credential values. Do not infer the provider
+  from the variable names.
+- This is deployment configuration, not an intentional code difference. Keep
+  the upstream storage adapter and existing Render variables unchanged unless
+  upstream itself adopts a different configuration contract.
 
 ## Explicitly deferred work
 
-These are ideas, not current customizations. Do not treat them as implemented:
-
-- final production storage cutover (until source/destination verification is
-  recorded and Render has been switched).
+There is no deferred storage migration or cutover: Supabase Storage is already
+the active object store for this deployment.
 
 If implemented later, isolate provider-specific behavior in its provider
 adapter, storage behavior behind `backend/src/lib/storage.ts`, and chat-project
@@ -148,8 +137,9 @@ Run from the canonical checkout at `/Users/drew/Developer/mike`:
 
 - Upstream baseline: `204d2d5` (2026-08-11)
 - Downstream merge: `9bcd0d3`
-- Feature integration commits: `5b71d25` (chat movement), `a27f111` (Anthropic
-  web research), and `2a9e407` (provider-neutral storage).
+- Feature integration commits: `5b71d25` (chat movement) and `a27f111`
+  (Anthropic web research).
 - Effective code delta after reconciliation: Render binding, Anthropic caching
-  and native web research, creator-controlled chat movement, and the
-  provider-neutral storage adapter/migration utility described above.
+  and native web research, and creator-controlled chat movement. Storage code
+  matches upstream; Supabase is selected solely through deployment values in
+  the upstream-compatible `R2_*` variables.
