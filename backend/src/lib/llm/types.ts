@@ -34,6 +34,16 @@ export type StreamCallbacks = {
     onReasoningBlockEnd?: () => void;
     onContentDelta?: (text: string) => void;
     onToolCallStart?: (call: NormalizedToolCall) => void;
+    onServerToolStart?: (name: "web_search" | "web_fetch") => void;
+};
+
+export type WebCitation = {
+    type: "citation_data";
+    kind: "web";
+    ref: number;
+    title: string;
+    url: string;
+    cited_text: string;
 };
 
 export type UserApiKeys = {
@@ -65,4 +75,5 @@ export type StreamChatParams = {
 
 export type StreamChatResult = {
     fullText: string;
+    webCitations?: WebCitation[];
 };

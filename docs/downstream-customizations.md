@@ -31,12 +31,39 @@ intentionally differs from `upstream/main`.
   Anthropic SDK, also verify that both `messages.stream` and `messages.create`
   still accept the configured `cache_control` values.
 
+### Move chats between General and projects
+
+- Files: `backend/src/lib/chatMovement.ts`,
+  `backend/src/routes/chat.ts`, `frontend/src/app/components/assistant/MoveChatDialog.tsx`,
+  and narrow chat API/context/sidebar hooks.
+- Invariant: only a chat's creator can move it; the creator must have access to
+  the destination; `null` moves it to General; shared-project destinations warn
+  that visibility changes.
+- Upstream interaction: retain the dedicated `PATCH /chat/:chatId/project`
+  endpoint and service rather than expanding title-renaming behavior. Keep the
+  picker UI in its own component and sidebar integration to one menu entry.
+- Validation: focused movement/API/UI tests plus backend and frontend suites.
+
+### Anthropic native web research
+
+- Files: `backend/src/lib/llm/anthropicServerTools.ts`,
+  `backend/src/lib/llm/webResearchPolicy.ts`, narrow hooks in the Claude adapter
+  and stream types, and the existing frontend event/citation components.
+- Invariant: Claude models receive Anthropic's native basic web search and web
+  fetch tools; fetched-source citations are enabled; legal research prioritizes
+  primary government/court sources and CourtListener, while secondary sources
+  remain available as fallback.
+- Upstream interaction: provider protocol and research policy stay in new
+  provider-specific modules. Shared adapter changes remain a callback plus an
+  optional result field. Web sources extend Mike's citation UI rather than
+  creating a parallel citation system.
+- Validation: SDK protocol unit tests, web-citation UI tests, TypeScript builds,
+  and backend/frontend suites. Re-check tool versions when upgrading the SDK.
+
 ## Explicitly deferred work
 
 These are ideas, not current customizations. Do not treat them as implemented:
 
-- moving a chat into or between projects;
-- Anthropic native web-search tools and source prioritization;
 - migration from Cloudflare R2-compatible storage to Supabase Storage.
 
 If implemented later, isolate provider-specific behavior in its provider

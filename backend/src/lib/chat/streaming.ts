@@ -4,6 +4,7 @@ import {
   DEFAULT_MAIN_MODEL,
   type LlmMessage,
   type OpenAIToolSchema,
+  type WebCitation,
 } from "../llm";
 import { safeErrorMessage } from "../safeError";
 import { createServerSupabase } from "../supabase";
@@ -48,6 +49,7 @@ import { verifyDocumentCitations } from "./verifyCitations";
 
 export type AssistantEvent =
   | { type: "reasoning"; text: string }
+  | { type: "web_research"; action: "search" | "fetch" }
   | AskInputsEvent
   | {
       type: "ask_inputs_response";
@@ -338,10 +340,11 @@ export async function runLLMStream(params: {
   };
 
   const selectedModel = resolveModel(model, DEFAULT_MAIN_MODEL);
+  let webCitations: WebCitation[] = [];
 
   try {
     throwIfAborted(signal);
-    await streamChatWithTools({
+    const llmResult = await streamChatWithTools({
       model: selectedModel,
       systemPrompt,
       messages: chatMessages,
@@ -381,6 +384,13 @@ export async function runLLMStream(params: {
               name: call.name,
             })}\n\n`,
           );
+        },
+        onServerToolStart: (name) => {
+          const action: "search" | "fetch" =
+            name === "web_search" ? "search" : "fetch";
+          const event = { type: "web_research" as const, action };
+          events.push(event);
+          write(`data: ${JSON.stringify(event)}\n\n`);
         },
       },
       runTools: async (calls) => {
@@ -515,6 +525,7 @@ export async function runLLMStream(params: {
         }));
       },
     });
+    webCitations = llmResult.webCitations ?? [];
   } catch (err) {
     if (err instanceof AssistantStreamAskInputsPause) {
       // The ask_inputs event has already been emitted and persisted in `events`.
@@ -567,6 +578,19 @@ export async function runLLMStream(params: {
       return pending;
     };
     citations = await verifyDocumentCitations(rawCitations, getSourceText);
+  }
+  if (webCitations.length) {
+    const nextRef = citations.reduce<number>((highest, citation) => {
+      if (!citation || typeof citation !== "object") return highest;
+      const ref = (citation as { ref?: unknown }).ref;
+      return typeof ref === "number" ? Math.max(highest, ref) : highest;
+    }, 0);
+    citations.push(
+      ...webCitations.map((citation, index) => ({
+        ...citation,
+        ref: nextRef + index + 1,
+      })),
+    );
   }
   devLog("[chat/stream] final citations", {
     hasCitationsBlock: citationDiagnostics.hasBlock,

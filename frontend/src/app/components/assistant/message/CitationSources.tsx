@@ -1,4 +1,4 @@
-import { Loader2, Scale } from "lucide-react";
+import { Globe2, Loader2, Scale } from "lucide-react";
 import { FileTypeIcon } from "../../shared/FileTypeIcon";
 import { displayCitationQuote, formatCitationPage } from "../../shared/types";
 import type { Citation } from "../../shared/types";
@@ -20,6 +20,7 @@ function citationSourceKey(annotation: Citation): string {
     if (annotation.kind === "case") {
         return `case:${annotation.cluster_id}`;
     }
+    if (annotation.kind === "web") return `web:${annotation.url}`;
     return `document:${annotation.document_id}`;
 }
 
@@ -30,6 +31,7 @@ function citationSourceLabel(annotation: Citation): string {
         if (caseName && citation) return `${caseName}, ${citation}`;
         return caseName || citation || `Case ${annotation.cluster_id}`;
     }
+    if (annotation.kind === "web") return annotation.title;
     return annotation.filename;
 }
 
@@ -48,6 +50,9 @@ function CitationSourceIcon({
 }) {
     if (annotation.kind === "case") {
         return <Scale className="h-3.5 w-3.5 text-slate-600" />;
+    }
+    if (annotation.kind === "web") {
+        return <Globe2 className="h-3.5 w-3.5 text-slate-600" />;
     }
     return (
         <FileTypeIcon fileType={annotation.filename} className="h-3.5 w-3.5" />
