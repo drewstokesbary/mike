@@ -31,11 +31,26 @@ intentionally differs from `upstream/main`.
   Anthropic SDK, also verify that both `messages.stream` and `messages.create`
   still accept the configured `cache_control` values.
 
+### Move chats between General Assistant and projects
+
+- Backend files: `backend/src/lib/chatMovement.ts` and the dedicated
+  `PATCH /chat/:chatId/project` registration in `backend/src/routes/chat.ts`.
+- Frontend files: `frontend/src/app/components/assistant/MoveChatDialog.tsx`,
+  with narrow calls from the sidebar, API client, and chat-history context.
+- Invariant: only the chat creator can move it; a destination project must be
+  accessible to that creator; `project_id: null` moves it to General Assistant.
+- Visibility rule: the UI warns before moving a chat into a project that has
+  shared members, because those members gain access to the chat.
+- Upstream interaction: do not fold movement into the title-renaming endpoint
+  or duplicate project-access rules in the UI. Keep the service and dialog as
+  the feature's primary integration surfaces.
+- Validation: focused service/route/API tests plus both complete test suites and
+  production builds.
+
 ## Explicitly deferred work
 
 These are ideas, not current customizations. Do not treat them as implemented:
 
-- moving a chat into or between projects;
 - Anthropic native web-search tools and source prioritization;
 - migration from Cloudflare R2-compatible storage to Supabase Storage.
 

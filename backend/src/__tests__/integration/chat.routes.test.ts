@@ -224,3 +224,20 @@ describe("PATCH /chat/:chatId", () => {
         expect(res.body.detail).toBe("title is required");
     });
 });
+
+describe("PATCH /chat/:chatId/project", () => {
+    it.each([undefined, "", "   ", 42])(
+        "rejects an invalid project_id before touching the database",
+        async (projectId) => {
+            const res = await request(app)
+                .patch("/chat/chat-1/project")
+                .set("Authorization", "Bearer test")
+                .send(projectId === undefined ? {} : { project_id: projectId });
+
+            expect(res.status).toBe(400);
+            expect(res.body.detail).toBe(
+                "project_id must be a non-empty string or null",
+            );
+        },
+    );
+});

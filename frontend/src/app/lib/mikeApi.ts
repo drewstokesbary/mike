@@ -923,6 +923,17 @@ export async function renameChat(chatId: string, title: string): Promise<void> {
     });
 }
 
+export async function moveChat(
+    chatId: string,
+    projectId: string | null,
+): Promise<{ id: string; project_id: string | null }> {
+    return apiRequest(`/chat/${chatId}/project`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ project_id: projectId }),
+    });
+}
+
 export async function deleteChat(chatId: string): Promise<void> {
     await apiRequest(`/chat/${chatId}`, { method: "DELETE" });
 }

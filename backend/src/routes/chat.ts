@@ -29,6 +29,7 @@ import {
 } from "../lib/userSettings";
 import { checkProjectAccess } from "../lib/access";
 import { safeErrorLog, safeErrorMessage } from "../lib/safeError";
+import { moveOwnedChat } from "../lib/chatMovement";
 
 export const chatRouter = Router();
 
@@ -303,6 +304,35 @@ chatRouter.patch("/:chatId", requireAuth, async (req, res) => {
     if (error || !data)
         return void res.status(404).json({ detail: "Chat not found" });
     res.json(data);
+});
+
+// PATCH /chat/:chatId/project — intentionally separate from title changes so
+// project visibility and creator-only movement remain an isolated capability.
+chatRouter.patch("/:chatId/project", requireAuth, async (req, res) => {
+    const userId = res.locals.userId as string;
+    const userEmail = res.locals.userEmail as string | undefined;
+    const { chatId } = req.params;
+    const rawProjectId = req.body?.project_id;
+    if (
+        rawProjectId !== null &&
+        (typeof rawProjectId !== "string" || !rawProjectId.trim())
+    ) {
+        return void res.status(400).json({
+            detail: "project_id must be a non-empty string or null",
+        });
+    }
+
+    const result = await moveOwnedChat(
+        chatId,
+        rawProjectId === null ? null : rawProjectId.trim(),
+        userId,
+        userEmail,
+        createServerSupabase(),
+    );
+    if (!result.ok) {
+        return void res.status(result.status).json({ detail: result.detail });
+    }
+    res.json(result.chat);
 });
 
 // DELETE /chat/:chatId
