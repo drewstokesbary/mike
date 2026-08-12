@@ -79,6 +79,19 @@ intentionally differs from `upstream/main`.
   signed-URL, and delete checks; source/destination count, size, and SHA-256
   verification before Render cutover.
 
+#### Storage rollout record (2026-08-11)
+
+- CABW project `orzoqismohtjgdjhuypy` has a private `mike` bucket with 227
+  objects totaling 145,696,740 bytes.
+- All 219 distinct `storage_path` / `pdf_storage_path` values referenced by
+  `document_versions` exist in that bucket; 8 objects are currently
+  unreferenced and were intentionally left untouched.
+- A temporary-object test passed upload, byte-identical download, prefix list,
+  signed URL (HTTP 200), and deletion against the Supabase S3 endpoint.
+- The local backend already targets that endpoint through legacy `R2_*` names.
+- Do not delete the R2 bucket or declare source/destination hash parity until
+  old R2 credentials are made available to `storage:migrate` for comparison.
+
 ## Explicitly deferred work
 
 These are ideas, not current customizations. Do not treat them as implemented:
@@ -132,6 +145,8 @@ Run from the canonical checkout at `/Users/drew/Developer/mike`:
 
 - Upstream baseline: `204d2d5` (2026-08-11)
 - Downstream merge: `9bcd0d3`
-- Effective code delta after reconciliation: Render binding in
-  `backend/src/index.ts` and Anthropic caching in
-  `backend/src/lib/llm/claude.ts`.
+- Feature integration commits: `5b71d25` (chat movement), `a27f111` (Anthropic
+  web research), and `2a9e407` (provider-neutral storage).
+- Effective code delta after reconciliation: Render binding, Anthropic caching
+  and native web research, creator-controlled chat movement, and the
+  provider-neutral storage adapter/migration utility described above.
