@@ -31,13 +31,30 @@ intentionally differs from `upstream/main`.
   Anthropic SDK, also verify that both `messages.stream` and `messages.create`
   still accept the configured `cache_control` values.
 
+### Provider-neutral S3 storage configuration
+
+- Files: `backend/src/lib/storage.ts`, `backend/.env.example`, and
+  `backend/scripts/migrate-s3-storage.ts`.
+- Invariant: `STORAGE_*` config selects any S3-compatible provider with an
+  explicit region; legacy `R2_*` variables remain a complete fallback. Object
+  keys and all application storage operations are unchanged.
+- Reason: permit a staged, reversible move from Cloudflare R2 to the private
+  `mike` bucket in the CABW Supabase project without provider logic spreading
+  through document code.
+- Upstream interaction: keep all provider selection behind `storage.ts` and
+  preserve its public upload/download/list/delete/signed-URL API.
+- Validation: config unit tests; live temporary-object upload, download, list,
+  signed-URL, and delete checks; source/destination count, size, and SHA-256
+  verification before Render cutover.
+
 ## Explicitly deferred work
 
 These are ideas, not current customizations. Do not treat them as implemented:
 
 - moving a chat into or between projects;
 - Anthropic native web-search tools and source prioritization;
-- migration from Cloudflare R2-compatible storage to Supabase Storage.
+- final production storage cutover (until source/destination verification is
+  recorded and Render has been switched).
 
 If implemented later, isolate provider-specific behavior in its provider
 adapter, storage behavior behind `backend/src/lib/storage.ts`, and chat-project
