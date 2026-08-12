@@ -14,6 +14,7 @@ import {
     createChat,
     deleteChat,
     listChats,
+    moveChat,
     renameChat,
 } from "@/app/lib/mikeApi";
 import type { Chat, Message } from "@/app/components/shared/types";
@@ -27,6 +28,7 @@ interface ChatHistoryContextType {
     loadMoreChats: () => void;
     saveChat: (projectId?: string) => Promise<string | null>;
     renameChat: (chatId: string, title: string) => Promise<void>;
+    moveChat: (chatId: string, projectId: string | null) => Promise<void>;
     newChatMessages: Message[] | null;
     setNewChatMessages: (messages: Message[] | null) => void;
     replaceChatId: (
@@ -168,6 +170,25 @@ export function ChatHistoryProvider({ children }: { children: ReactNode }) {
         [currentChatId, loadChats],
     );
 
+    const moveChatFn = useCallback(
+        async (chatId: string, projectId: string | null) => {
+            setChats((prev) =>
+                (prev ?? []).map((chat) =>
+                    chat.id === chatId
+                        ? { ...chat, project_id: projectId }
+                        : chat,
+                ),
+            );
+            try {
+                await moveChat(chatId, projectId);
+            } catch (error) {
+                void loadChats();
+                throw error;
+            }
+        },
+        [loadChats],
+    );
+
     const value = useMemo(
         () => ({
             chats,
@@ -178,6 +199,7 @@ export function ChatHistoryProvider({ children }: { children: ReactNode }) {
             loadMoreChats,
             saveChat,
             renameChat: renameChatFn,
+            moveChat: moveChatFn,
             newChatMessages,
             setNewChatMessages,
             replaceChatId,
@@ -191,6 +213,7 @@ export function ChatHistoryProvider({ children }: { children: ReactNode }) {
             loadMoreChats,
             saveChat,
             renameChatFn,
+            moveChatFn,
             newChatMessages,
             replaceChatId,
             deleteChatFn,

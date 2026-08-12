@@ -80,6 +80,7 @@ import {
     listWorkflows,
     lookupUserByEmail,
     mapTRMessages,
+    moveChat,
     moveDocumentToFolder,
     moveLibraryDocument,
     moveLibraryFolder,
@@ -1092,6 +1093,19 @@ describe("query and payload defaults", () => {
         await listChats();
 
         expect(lastFetchCall().url).toBe("http://localhost:3001/chat");
+    });
+
+    it("moves chats through the dedicated project endpoint", async () => {
+        fetchMock.mockResolvedValue(
+            jsonResponse({ id: "c1", project_id: "p2" }),
+        );
+
+        await moveChat("c1", "p2");
+
+        const { url, init } = lastFetchCall();
+        expect(url).toBe("http://localhost:3001/chat/c1/project");
+        expect(init.method).toBe("PATCH");
+        expect(JSON.parse(init.body as string)).toEqual({ project_id: "p2" });
     });
 
     it("folder creation defaults parent_folder_id to null, not undefined", async () => {

@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
-import { MoreHorizontal, Pencil, Trash2, Check, X } from "lucide-react";
+import { MoreHorizontal, Pencil, Trash2, Check, X, FolderInput } from "lucide-react";
+import { useRouter } from "next/navigation";
 import {
     DropdownMenu,
     DropdownMenuTrigger,
@@ -16,6 +17,7 @@ import { OwnerOnlyPopup } from "@/app/components/popups/OwnerOnlyPopup";
 import type { Chat } from "@/app/components/shared/types";
 import { ChatSkeuoIcon } from "@/app/components/shared/AppSidebarSkeuoIcons";
 import { cn } from "@/app/lib/utils";
+import { MoveChatDialog } from "@/app/components/assistant/MoveChatDialog";
 import {
     APP_SURFACE_ACTIVE_CLASS,
     APP_SURFACE_HOVER_CLASS,
@@ -34,6 +36,8 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
     const [isRenaming, setIsRenaming] = useState(false);
     const [editTitle, setEditTitle] = useState(chat.title ?? "");
     const [ownerOnlyAction, setOwnerOnlyAction] = useState<string | null>(null);
+    const [moveOpen, setMoveOpen] = useState(false);
+    const router = useRouter();
     const editInputRef = useRef<HTMLInputElement>(null);
     // Sidebar can show collaborator chats from projects the user owns;
     // rename/delete are still creator-only on the backend, so guard here.
@@ -132,6 +136,18 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
                             <LiquidDropdownItem
                                 onClick={() => {
                                     if (!isChatOwner) {
+                                        setOwnerOnlyAction("move this chat");
+                                        return;
+                                    }
+                                    setMoveOpen(true);
+                                }}
+                            >
+                                <FolderInput className="mr-2 h-4 w-4" />
+                                Move to project
+                            </LiquidDropdownItem>
+                            <LiquidDropdownItem
+                                onClick={() => {
+                                    if (!isChatOwner) {
                                         setOwnerOnlyAction("rename this chat");
                                         return;
                                     }
@@ -163,6 +179,19 @@ export function SidebarChatItem({ chat, isActive, onSelect, projectName }: Props
                 open={!!ownerOnlyAction}
                 action={ownerOnlyAction ?? undefined}
                 onClose={() => setOwnerOnlyAction(null)}
+            />
+            <MoveChatDialog
+                chat={chat}
+                open={moveOpen}
+                onClose={() => setMoveOpen(false)}
+                onMoved={(projectId) => {
+                    if (!isActive) return;
+                    router.push(
+                        projectId
+                            ? `/projects/${projectId}/assistant/chat/${chat.id}`
+                            : `/assistant/chat/${chat.id}`,
+                    );
+                }}
             />
         </div>
     );
