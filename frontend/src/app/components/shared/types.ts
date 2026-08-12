@@ -102,6 +102,11 @@ export interface EditAnnotation {
 
 export type AssistantEvent =
   | { type: "reasoning"; text: string; isStreaming?: boolean }
+  | {
+      type: "web_research";
+      action: "search" | "fetch";
+      isStreaming?: boolean;
+    }
   | { type: "error"; message: string }
   | {
       type: "tool_call_start";
@@ -377,6 +382,15 @@ export type CaseCitation = {
   quotes: CaseCitationQuote[];
 };
 
+export type WebCitation = {
+  type: "citation_data";
+  kind: "web";
+  ref: number;
+  title: string;
+  url: string;
+  cited_text: string;
+};
+
 /**
  * A citation emitted by the assistant. Document citations have doc/page
  * anchors. Case citations anchor to a CourtListener cluster and include a
@@ -384,7 +398,8 @@ export type CaseCitation = {
  */
 export type Citation =
   | DocumentCitation
-  | CaseCitation;
+  | CaseCitation
+  | WebCitation;
 
 const PAGE_BREAK_SENTINEL = "[[PAGE_BREAK]]";
 
@@ -424,7 +439,7 @@ function formatCellLocatorReadable(sheet?: string, cell?: string): string {
 export function getCitationCells(
   a: Citation,
 ): { sheet?: string; cell?: string }[] {
-  if (a.kind === "case") return [];
+  if (a.kind === "case" || a.kind === "web") return [];
   return getDocumentCitationQuotes(a)
     .filter((q) => q.cell || q.sheet)
     .map((q) => ({ sheet: q.sheet, cell: q.cell }));
@@ -455,7 +470,7 @@ function expandDocumentQuoteEntry(entry: DocumentCitationQuote): CitationQuote[]
 export function getDocumentCitationQuotes(
   a: Citation,
 ): DocumentCitationQuote[] {
-  if (a.kind === "case") return [];
+  if (a.kind === "case" || a.kind === "web") return [];
   if (Array.isArray(a.quotes) && a.quotes.length) {
     return a.quotes.filter((entry) => entry.quote.trim().length > 0);
   }
@@ -470,7 +485,7 @@ export function getDocumentCitationQuotes(
 export function expandCitationToEntries(
   a: Citation,
 ): CitationQuote[] {
-  if (a.kind === "case") return [];
+  if (a.kind === "case" || a.kind === "web") return [];
   return getDocumentCitationQuotes(a).flatMap(expandDocumentQuoteEntry);
 }
 
@@ -483,6 +498,7 @@ export function formatCitationPage(a: Citation): string {
   if (a.kind === "case") {
     return a.citation || a.case_name || `Case ${a.cluster_id}`;
   }
+  if (a.kind === "web") return new URL(a.url).hostname;
   const quotes = getDocumentCitationQuotes(a);
   // Spreadsheets are located by cell, e.g. "Sheet1!B7" (or several).
   if (isSpreadsheetFilename(a.filename)) {
@@ -507,7 +523,7 @@ export function formatCitationQuotePage(
   page: number | string,
   quote?: DocumentCitationQuote,
 ): string {
-  if (a.kind !== "case" && isSpreadsheetFilename(a.filename)) {
+  if (a.kind !== "case" && a.kind !== "web" && isSpreadsheetFilename(a.filename)) {
     return formatCellLocatorReadable(quote?.sheet, quote?.cell);
   }
   return `Page ${page}`;
@@ -531,6 +547,7 @@ export function displayCitationQuote(a: Citation): string {
       .map((q) => q.quote.replaceAll(PAGE_BREAK_SENTINEL, "..."))
       .join(" / ");
   }
+  if (a.kind === "web") return a.cited_text;
   return getDocumentCitationQuotes(a)
     .map((q) => cleanCitationQuoteText(a, q.quote))
     .filter(Boolean)

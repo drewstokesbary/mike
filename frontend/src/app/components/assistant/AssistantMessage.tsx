@@ -237,6 +237,10 @@ export function AssistantMessage({
         }
     }
     const handleOpenCitationSource = (citation: Citation) => {
+        if (citation.kind === "web") {
+            window.open(citation.url, "_blank", "noopener,noreferrer");
+            return;
+        }
         if (onOpenCitationSource) {
             onOpenCitationSource(citation);
             return;
@@ -250,6 +254,7 @@ export function AssistantMessage({
         });
     };
     const canOpenCitationSource = (citation: Citation) =>
+        citation.kind === "web" ||
         !!onOpenCitationSource ||
         (citation.kind !== "case" && !!onOpenDocument);
     const showCitationBlock =
@@ -365,6 +370,21 @@ export function AssistantMessage({
                 />
             );
         }
+        if (event.type === "web_research") {
+            return (
+                <EventBlock
+                    key={globalIdx}
+                    showConnector={showConnector}
+                    isStreaming={event.isStreaming}
+                >
+                    <span className="font-medium">
+                        {event.action === "search"
+                            ? "Searching the web..."
+                            : "Reading a web source..."}
+                    </span>
+                </EventBlock>
+            );
+        }
         if (event.type === "tool_call_start") {
             return (
                 <EventBlock
@@ -414,7 +434,10 @@ export function AssistantMessage({
         }
         if (event.type === "doc_read") {
             const ann = citations.find(
-                (a) => a.kind !== "case" && a.filename === event.filename,
+                (a) =>
+                    a.kind !== "case" &&
+                    a.kind !== "web" &&
+                    a.filename === event.filename,
             );
             return (
                 <DocReadBlock

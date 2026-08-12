@@ -1,5 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
-import type { Tool } from "@anthropic-ai/sdk/resources/messages/messages";
+import type {
+  ContentBlock as AnthropicContentBlock,
+  ToolUnion,
+} from "@anthropic-ai/sdk/resources/messages/messages";
 import type {
   StreamChatParams,
   StreamChatResult,
@@ -8,6 +11,13 @@ import type {
 } from "./types";
 import { toClaudeTools } from "./tools";
 import { createRawLlmStreamRecorder, logRawLlmStream } from "./rawStreamLog";
+import {
+  ANTHROPIC_WEB_TOOLS,
+  extractWebCitations,
+  serverToolName,
+  type WebCitation,
+} from "./anthropicServerTools";
+import { withWebResearchPolicy } from "./webResearchPolicy";
 
 type ContentBlock =
   | { type: "text"; text: string }
@@ -121,9 +131,11 @@ export async function streamClaude(
   const maxIter = params.maxIterations ?? 10;
   const anthropic = client(apiKeys?.claude);
   const claudeTools = toClaudeTools(tools);
+  const nativeTools = [...claudeTools, ...ANTHROPIC_WEB_TOOLS] as ToolUnion[];
 
   const messages: NativeMessage[] = toNativeMessages(params.messages);
   let fullText = "";
+  let webCitations: WebCitation[] = [];
   const rawStreamRecorder = createRawLlmStreamRecorder({
     provider: "claude",
     model,
@@ -135,11 +147,9 @@ export async function streamClaude(
       const stream = anthropic.messages.stream({
         model,
         cache_control: CONVERSATION_PROMPT_CACHE_CONTROL,
-        system: systemPrompt,
+        system: withWebResearchPolicy(systemPrompt),
         messages: messages as Anthropic.MessageParam[],
-        tools: claudeTools.length
-          ? (claudeTools as unknown as Tool[])
-          : undefined,
+        tools: nativeTools,
         max_tokens: MAX_TOKENS,
         // Claude 4.x models require `thinking.type: "adaptive"` and
         // drive effort via `output_config.effort` rather than a fixed
@@ -218,6 +228,10 @@ export async function streamClaude(
       throwIfAborted(params.abortSignal);
       const stopReason = final.stop_reason;
       const assistantBlocks = final.content as ContentBlock[];
+      webCitations = extractWebCitations(
+        final.content as AnthropicContentBlock[],
+        webCitations,
+      );
 
       // Extract text content and tool_use calls from the final assistant
       // message so we can accumulate text and drive the tool-call loop.
@@ -239,7 +253,15 @@ export async function streamClaude(
           };
           callbacks.onToolCallStart?.(call);
           toolCalls.push(call);
+        } else {
+          const name = serverToolName(block as AnthropicContentBlock);
+          if (name) callbacks.onServerToolStart?.(name);
         }
+      }
+
+      if (stopReason === "pause_turn") {
+        messages.push({ role: "assistant", content: assistantBlocks });
+        continue;
       }
 
       if (stopReason !== "tool_use" || !toolCalls.length || !runTools) {
@@ -264,7 +286,7 @@ export async function streamClaude(
     }
 
     await rawStreamRecorder?.flush("completed");
-    return { fullText };
+    return { fullText, webCitations };
   } catch (error) {
     await rawStreamRecorder?.flush("error", error);
     throw error;

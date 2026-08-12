@@ -1,5 +1,5 @@
-import { render, screen } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import { fireEvent, render, screen } from "@testing-library/react";
+import { describe, expect, it, vi } from "vitest";
 import type { Citation, DocumentCitation } from "../../shared/types";
 import { citationTooltip, CitationsBlock } from "./CitationSources";
 
@@ -19,6 +19,32 @@ function documentCitation(ref: number, verified?: boolean): DocumentCitation {
 }
 
 describe("CitationsBlock verification states", () => {
+  it("renders native web citations as linked sources", () => {
+    const open = vi.spyOn(window, "open").mockImplementation(() => null);
+    render(
+      <CitationsBlock
+        citations={[{
+          type: "citation_data",
+          kind: "web",
+          ref: 1,
+          title: "Washington Administrative Code",
+          url: "https://app.leg.wa.gov/wac/default.aspx?cite=246-10",
+          cited_text: "WAC 246-10",
+        }]}
+        onOpenSource={(citation) => {
+          if (citation.kind === "web") window.open(citation.url, "_blank");
+        }}
+      />,
+    );
+
+    fireEvent.click(screen.getByText("Washington Administrative Code"));
+    expect(open).toHaveBeenCalledWith(
+      "https://app.leg.wa.gov/wac/default.aspx?cite=246-10",
+      "_blank",
+    );
+    open.mockRestore();
+  });
+
   it("marks only unverified document citation buttons", () => {
     render(
       <CitationsBlock

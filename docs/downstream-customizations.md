@@ -47,11 +47,26 @@ intentionally differs from `upstream/main`.
 - Validation: focused service/route/API tests plus both complete test suites and
   production builds.
 
+### Anthropic native web research
+
+- Files: `backend/src/lib/llm/anthropicServerTools.ts`,
+  `backend/src/lib/llm/webResearchPolicy.ts`, narrow hooks in the Claude adapter
+  and stream types, and the existing frontend event/citation components.
+- Invariant: Claude models receive Anthropic's native basic web search and web
+  fetch tools; fetched-source citations are enabled; legal research prioritizes
+  primary government/court sources and CourtListener, while secondary sources
+  remain available as fallback.
+- Upstream interaction: provider protocol and research policy stay in new
+  provider-specific modules. Shared adapter changes remain a callback plus an
+  optional result field. Web sources extend Mike's citation UI rather than
+  creating a parallel citation system.
+- Validation: SDK protocol unit tests, web-citation UI tests, TypeScript builds,
+  and backend/frontend suites. Re-check tool versions when upgrading the SDK.
+
 ## Explicitly deferred work
 
 These are ideas, not current customizations. Do not treat them as implemented:
 
-- Anthropic native web-search tools and source prioritization;
 - migration from Cloudflare R2-compatible storage to Supabase Storage.
 
 If implemented later, isolate provider-specific behavior in its provider
