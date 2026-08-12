@@ -118,11 +118,17 @@ Run from the canonical checkout at `/Users/drew/Developer/mike`:
 
 1. Require a clean working tree and fetch both remotes.
 2. Create a dated safety branch from `main`.
-3. Review `git log --oneline main..upstream/main` and the upstream diff.
-4. Merge `upstream/main` into `main`; do not rebase the published `main` branch.
-5. Resolve conflicts by preserving the invariants above while adopting upstream
-   implementations everywhere else.
-6. Confirm the effective downstream delta with:
+3. Read this ledger, then review `git log --oneline main..upstream/main` and the
+   upstream diff by feature area. Search for behavioral overlap with every
+   customization even when Git reports no conflicting lines.
+4. For every active customization, make an explicit preliminary decision:
+   **Retire**, **Reshape**, or **Retain**, using the semantic reconciliation
+   rules below.
+5. Merge `upstream/main` into `main`; do not rebase the published `main` branch.
+6. Resolve conflicts and non-conflicting architectural overlap according to
+   those decisions. Adopt upstream implementations and extension points rather
+   than preserving downstream code structure for its own sake.
+7. Confirm the effective downstream delta with:
 
    ```bash
    git diff --stat upstream/main..main
@@ -131,12 +137,48 @@ Run from the canonical checkout at `/Users/drew/Developer/mike`:
      backend/src/lib/llm/claude.ts
    ```
 
-7. Review newly added database migrations and apply unapplied migrations in
+8. Account for every remaining code difference. Remove redundant implementations
+   and tests instead of keeping downstream and upstream versions in parallel.
+9. Review newly added database migrations and apply unapplied migrations in
    filename order before deploying code that depends on them.
-8. Run backend and frontend builds and tests, validate Compose configuration,
+10. Run backend and frontend builds and tests, validate Compose configuration,
    and build the backend Docker image when Docker is available.
-9. Commit the merge, push `main`, and monitor Render deployment and health.
-10. Update this ledger if the intentional downstream delta changed.
+11. Update every affected ledger entry and add a reconciliation record using the
+    template below before committing.
+12. Commit the merge, push `main`, and monitor Render deployment and health.
+
+## Semantic reconciliation rules
+
+Git conflict resolution is only one part of an upstream update. Apply these
+rules even when the merge is automatic and tests pass:
+
+- **Retire** a customization when upstream now fulfills its behavioral
+  invariant. Delete the downstream implementation and redundant tests, use
+  upstream's implementation, and remove or archive the active ledger entry.
+- **Reshape** a customization when upstream fulfills part of its invariant or
+  introduces a new pattern that should own the behavior. Keep only the unmet
+  requirement and rebuild it around upstream's architecture. For example, if a
+  downstream feature implements A+B and upstream adds A differently, delete the
+  downstream A and reconsider B using upstream A's services, types, UI patterns,
+  extension points, and tests.
+- **Retain** a customization only when upstream has no equivalent behavior or
+  suitable extension point. Keep the smallest isolated delta that preserves the
+  invariant.
+
+Judge equivalence by observable behavior, authorization and visibility rules,
+data model, provider protocol, UX, and operational requirements—not function
+names or line-by-line similarity. A clean merge is not evidence that two
+implementations should coexist.
+
+For each upstream merge, append a compact record under **Last reconciliation**:
+
+```text
+- <customization>: Retire | Reshape | Retain — <reason and resulting action>.
+```
+
+The record must cover every active customization, not only files that had merge
+conflicts. Update or remove the corresponding active entry whenever its files,
+invariant, integration strategy, or validation changes.
 
 ## Git practices
 
@@ -146,8 +188,10 @@ Run from the canonical checkout at `/Users/drew/Developer/mike`:
 - Enable `rerere` in this checkout so Git can reuse recorded resolutions when a
   future upstream merge repeats the same conflict.
 - Never commit secrets, local `.env` files, or production database exports.
-- Do not blindly preserve an old patch when upstream now provides equivalent
-  behavior; preserve the invariant and adopt the upstream implementation.
+- Treat downstream code as disposable and its documented behavior as the thing
+  worth preserving. When upstream provides equivalent behavior, remove the old
+  patch; when it provides a partial equivalent or a better integration pattern,
+  reshape the remaining customization around upstream.
 
 ## Last reconciliation
 
