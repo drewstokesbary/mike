@@ -11,11 +11,17 @@ import {
     AssistantStreamError,
     buildCancelledAssistantMessage,
     extractCitations,
+    generateSpotlightNonce,
     isAbortError,
     runLLMStream,
     stripTransientAssistantEvents,
-    parseAskInputsResponsePayload,
-    type ChatMessage,
+    parseChatMessages,
+    parseOptionalAskInputsResponse,
+    parseOptionalChatId,
+    parseOptionalModel,
+    parseOptionalProjectId,
+    parseOptionalDocumentContext,
+    buildWordDocumentContextPrompt,
 } from "../lib/chat";
 import { completeText } from "../lib/llm";
 import {
@@ -46,67 +52,6 @@ type AccessibleChat = {
     user_id: string;
     project_id: string | null;
 } & Record<string, unknown>;
-
-function parseOptionalProjectId(value: unknown):
-    | { ok: true; provided: boolean; projectId: string | null }
-    | { ok: false; detail: string } {
-    if (value === undefined)
-        return { ok: true, provided: false, projectId: null };
-    if (value === null) return { ok: true, provided: true, projectId: null };
-    if (typeof value !== "string" || !value.trim()) {
-        return {
-            ok: false,
-            detail: "project_id must be a non-empty string or null",
-        };
-    }
-    return { ok: true, provided: true, projectId: value.trim() };
-}
-
-function parseOptionalChatId(value: unknown):
-    | { ok: true; chatId: string | null }
-    | { ok: false; detail: string } {
-    if (value === undefined || value === null) return { ok: true, chatId: null };
-    if (typeof value !== "string" || !value.trim()) {
-        return { ok: false, detail: "chat_id must be a non-empty string" };
-    }
-    return { ok: true, chatId: value.trim() };
-}
-
-function parseChatMessages(value: unknown):
-    | { ok: true; messages: ChatMessage[] }
-    | { ok: false; detail: string } {
-    if (!Array.isArray(value) || value.length === 0) {
-        return { ok: false, detail: "messages must be a non-empty array" };
-    }
-
-    for (const message of value) {
-        if (!message || typeof message !== "object" || Array.isArray(message)) {
-            return { ok: false, detail: "messages must contain objects" };
-        }
-        const row = message as Record<string, unknown>;
-        if (typeof row.role !== "string") {
-            return { ok: false, detail: "message.role must be a string" };
-        }
-        if (row.content !== null && typeof row.content !== "string") {
-            return {
-                ok: false,
-                detail: "message.content must be a string or null",
-            };
-        }
-    }
-
-    return { ok: true, messages: value as ChatMessage[] };
-}
-
-function parseOptionalModel(value: unknown):
-    | { ok: true; model: string | undefined }
-    | { ok: false; detail: string } {
-    if (value === undefined) return { ok: true, model: undefined };
-    if (typeof value !== "string" || !value.trim()) {
-        return { ok: false, detail: "model must be a non-empty string" };
-    }
-    return { ok: true, model: value.trim() };
-}
 
 async function validateAccessibleProjectId(
     projectId: string | null,
@@ -180,7 +125,7 @@ chatRouter.post("/create", requireAuth, async (req, res) => {
     if (!parsedProjectId.ok) {
         return void res.status(400).json({ detail: parsedProjectId.detail });
     }
-    const projectId = parsedProjectId.projectId;
+    const projectId = parsedProjectId.value.projectId;
     const db = createServerSupabase();
     const projectAccess = await validateAccessibleProjectId(
         projectId,
@@ -438,14 +383,31 @@ chatRouter.post("/", requireAuth, async (req, res) => {
     if (!parsedModel.ok) {
         return void res.status(400).json({ detail: parsedModel.detail });
     }
-    const askInputsResponse = parseAskInputsResponsePayload(
+    // Optional plain-text document context supplied by the Word add-in (the
+    // active document body, read via Word.run() — no upload, no stored
+    // document record). Injected into the LLM system prompt below.
+    const parsedDocumentContext = parseOptionalDocumentContext(
+        body.document_context,
+    );
+    if (!parsedDocumentContext.ok) {
+        return void res
+            .status(400)
+            .json({ detail: parsedDocumentContext.detail });
+    }
+    const parsedAskInputsResponse = parseOptionalAskInputsResponse(
         body.ask_inputs_response,
     );
+    if (!parsedAskInputsResponse.ok) {
+        return void res
+            .status(400)
+            .json({ detail: parsedAskInputsResponse.detail });
+    }
 
-    const messages = parsedMessages.messages;
-    const chat_id = parsedChatId.chatId;
-    const project_id = parsedProjectId.projectId;
-    const model = parsedModel.model;
+    const messages = parsedMessages.value;
+    const chat_id = parsedChatId.value;
+    const project_id = parsedProjectId.value.projectId;
+    const model = parsedModel.value;
+    const askInputsResponse = parsedAskInputsResponse.value;
 
     devLog("[chat/stream] incoming request", {
         userId,
@@ -459,7 +421,7 @@ chatRouter.post("/", requireAuth, async (req, res) => {
     const db = createServerSupabase();
     let chatId = chat_id ?? null;
     let chatTitle: string | null = null;
-    let resolvedProjectId: string | null = parsedProjectId.projectId;
+    let resolvedProjectId: string | null = parsedProjectId.value.projectId;
 
     if (chatId) {
         const existing = await getAccessibleChat(chatId, userId, userEmail, db);
@@ -468,8 +430,8 @@ chatRouter.post("/", requireAuth, async (req, res) => {
 
         const existingProjectId = existing.project_id ?? null;
         if (
-            parsedProjectId.provided &&
-            parsedProjectId.projectId !== existingProjectId
+            parsedProjectId.value.provided &&
+            parsedProjectId.value.projectId !== existingProjectId
         ) {
             return void res
                 .status(400)
@@ -537,22 +499,37 @@ chatRouter.post("/", requireAuth, async (req, res) => {
         doc_id,
         filename: info.filename,
     }));
+    // Generate the nonce before enriching prior events so document filenames
+    // and workflow titles replayed from earlier turns are fenced as well.
+    const nonce = generateSpotlightNonce();
     const enrichedMessages = await enrichWithPriorEvents(
         messages,
         chatId,
         db,
         docIndex,
+        nonce,
     );
     const {
         api_keys: apiKeys,
         legal_research_us: legalResearchUs,
     } = await getUserModelSettings(userId, db);
+    // Extra system context: the Word add-in's active-document body. The
+    // document text is user-controlled and a prompt-injection vector, so
+    // buildWordDocumentContextPrompt nonce-fences it before it enters the
+    // system prompt.
+    const systemPromptExtra = parsedDocumentContext.documentContext
+        ? buildWordDocumentContextPrompt(
+              parsedDocumentContext.documentContext,
+              nonce,
+          )
+        : undefined;
     const apiMessages = buildMessages(
         enrichedMessages,
         docAvailability,
-        undefined,
+        systemPromptExtra,
         undefined,
         legalResearchUs,
+        nonce,
     );
 
     const workflowStore = await buildWorkflowStore(userId, userEmail, db);
@@ -592,6 +569,7 @@ chatRouter.post("/", requireAuth, async (req, res) => {
             apiKeys,
             signal: streamAbort.signal,
             projectId: resolvedProjectId,
+            nonce,
         });
 
         devLog("[chat/stream] LLM stream finished", {
