@@ -66,6 +66,22 @@ intentionally differs from `upstream/main`.
 - Validation: SDK protocol unit tests, web-citation UI tests, TypeScript builds,
   and backend/frontend suites. Re-check tool versions when upgrading the SDK.
 
+### CourtListener case-law search registration
+
+- File: `backend/src/lib/chat/tools/courtlistenerTools.ts`.
+- Invariant: every CourtListener operation implemented by the dispatcher is
+  included in the tool list presented to the model. In particular,
+  `courtlistener_search_case_law` supports keyword, party-name, case-name,
+  court, and filing-date discovery before a cluster is fetched and read.
+- Reason: upstream implemented the search operation and dispatcher branch but
+  omitted its function schema, so models could verify known citations but
+  could not initiate general case-law discovery.
+- Upstream interaction: remove this downstream entry if upstream registers an
+  equivalent search schema; preserve upstream naming and argument shapes to
+  minimize future merge conflicts.
+- Validation: the focused CourtListener registration test, backend TypeScript
+  build, and backend test suite.
+
 ## Deployment configuration note: Supabase Storage
 
 - CABW project `orzoqismohtjgdjhuypy` has a private `mike` bucket with 227

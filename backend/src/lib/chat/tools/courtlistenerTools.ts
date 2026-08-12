@@ -73,10 +73,11 @@ export const COURTLISTENER_SYSTEM_PROMPT = `US CASE LAW RESEARCH:
 Use CourtListener when answering US-law questions that require case law.
 
 Workflow:
-1. If you have reporter citations, verify them with courtlistener_verify_citations using only clean citations: {"citations":["467 U.S. 837","323 U.S. 134"]}. Never pass case names to this tool.
-2. Fetch matched clusters with courtlistener_get_cases.
-3. Get cite-worthy text from the fetched cases with courtlistener_find_in_case. Use short 1-3 word searches, maximum 3 searches per assistant turn.
-4. If snippets are not enough, read only the necessary opinion(s) with courtlistener_read_case. For multi-opinion cases, choose the specific opinion_id/opinionIds needed; do not read all opinions by default.
+1. For a topic, keyword, party name, or case name without a reporter citation, discover relevant cases with courtlistener_search_case_law.
+2. If you have reporter citations, verify them with courtlistener_verify_citations using only clean citations: {"citations":["467 U.S. 837","323 U.S. 134"]}. Never pass case names to this tool.
+3. Fetch relevant matched clusters with courtlistener_get_cases.
+4. Get cite-worthy text from the fetched cases with courtlistener_find_in_case. Use short 1-3 word searches, maximum 3 searches per assistant turn.
+5. If snippets are not enough, read only the necessary opinion(s) with courtlistener_read_case. For multi-opinion cases, choose the specific opinion_id/opinionIds needed; do not read all opinions by default.
 
 Citation rules:
 - Final case citations must be based on opinion text or passage snippets supplied in this turn. Do not cite cases based only on memory, metadata, search results, citationLinks, or verification results.
@@ -90,6 +91,47 @@ Limits:
 - If any CourtListener call returns a rate-limit/throttling/429 error, stop all CourtListener calls for that turn and answer using only information already available.`;
 
 export const COURTLISTENER_TOOLS = [
+    {
+        type: "function",
+        function: {
+            name: COURTLISTENER_TOOL_NAMES.searchCaseLaw,
+            description:
+                "Search current CourtListener case-law opinions by topic, keyword, party name, or case name. Returns case metadata and cluster IDs, not cite-worthy opinion text. Fetch relevant results with courtlistener_get_cases before relying on or citing them.",
+            parameters: {
+                type: "object",
+                properties: {
+                    query: {
+                        type: "string",
+                        description:
+                            "CourtListener search query, such as a legal issue, party name, or case name.",
+                    },
+                    court: {
+                        type: "string",
+                        description:
+                            "Optional CourtListener court identifier used to limit results, such as scotus or ca9.",
+                    },
+                    filedAfter: {
+                        type: "string",
+                        description:
+                            "Optional earliest filing date in YYYY-MM-DD format.",
+                    },
+                    filedBefore: {
+                        type: "string",
+                        description:
+                            "Optional latest filing date in YYYY-MM-DD format.",
+                    },
+                    limit: {
+                        type: "integer",
+                        minimum: 1,
+                        maximum: 20,
+                        description:
+                            "Maximum number of search results to return. Default 10; maximum 20.",
+                    },
+                },
+                required: ["query"],
+            },
+        },
+    },
     {
         type: "function",
         function: {
