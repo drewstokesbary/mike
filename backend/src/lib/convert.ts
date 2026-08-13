@@ -6,6 +6,18 @@ let _convert:
   | ((buf: Buffer, ext: string, filter: undefined) => Promise<Buffer>)
   | null = null;
 let _sofficeBinaryPaths: string[] | null = null;
+let conversionQueueTail: Promise<void> = Promise.resolve();
+
+export function runWithLibreOfficeConversionLock<T>(
+  task: () => Promise<T>,
+): Promise<T> {
+  const result = conversionQueueTail.then(task, task);
+  conversionQueueTail = result.then(
+    () => undefined,
+    () => undefined,
+  );
+  return result;
+}
 
 function executablePath(filePath: string) {
   try {
@@ -128,9 +140,11 @@ export async function docxToPdf(buffer: Buffer): Promise<Buffer> {
       "LibreOffice/soffice binary was not found. Ensure Railway uses backend/nixpacks.toml or set SOFFICE_BINARY_PATH/LIBREOFFICE_BINARY_PATH.",
     );
   }
-  const convert = await getConvert();
-  const normalized = await normalizeDocxZipPaths(buffer);
-  return convert(normalized, ".pdf", undefined);
+  return runWithLibreOfficeConversionLock(async () => {
+    const convert = await getConvert();
+    const normalized = await normalizeDocxZipPaths(buffer);
+    return convert(normalized, ".pdf", undefined);
+  });
 }
 
 export function convertedPdfKey(userId: string, docId: string): string {

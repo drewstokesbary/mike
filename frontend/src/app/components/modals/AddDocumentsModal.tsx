@@ -16,6 +16,7 @@ import {
     formatUnsupportedDocumentWarning,
     partitionSupportedDocumentFiles,
 } from "@/app/lib/documentUploadValidation";
+import { uploadFilesSequentially } from "@/app/lib/sequentialUploads";
 
 interface Props {
     open: boolean;
@@ -30,6 +31,8 @@ interface Props {
     /** Keep the modal mounted (hidden) while closed so the loaded
      * directory listing survives close/reopen cycles. */
     keepMounted?: boolean;
+    /** Keep picked library documents as references instead of moving them. */
+    assignSelectedToProject?: boolean;
 }
 
 export function AddDocumentsModal({
@@ -42,6 +45,7 @@ export function AddDocumentsModal({
     initialSelectedDocuments,
     externalUploadedDocuments,
     keepMounted = false,
+    assignSelectedToProject = true,
 }: Props) {
     const [selectedDocuments, setSelectedDocuments] = useState<Document[]>([]);
     const [uploading, setUploading] = useState(false);
@@ -117,7 +121,7 @@ export function AddDocumentsModal({
     if (!open && (!keepMounted || !hasOpened)) return null;
 
     async function handleConfirm() {
-        if (projectId) {
+        if (projectId && assignSelectedToProject) {
             const toAssign = selectedDocuments.filter(
                 (d) => d.project_id !== projectId,
             );
@@ -167,12 +171,12 @@ export function AddDocumentsModal({
         setUploadingFilenames(supported.map((file) => file.name));
         setUploading(true);
         try {
-            const uploaded = await Promise.all(
-                supported.map((f) =>
+            const uploaded = await uploadFilesSequentially(
+                supported,
+                (f) =>
                     projectId
                         ? uploadProjectDocument(projectId, f)
                         : uploadStandaloneDocument(f),
-                ),
             );
             setExtraUploadedDocs((prev) => [...uploaded, ...prev]);
             setSelectedDocuments((prev) => [

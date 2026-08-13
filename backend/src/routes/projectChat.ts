@@ -3,6 +3,7 @@ import { requireAuth } from "../middleware/auth";
 import { createServerSupabase } from "../lib/supabase";
 import {
     buildProjectDocContext,
+    buildDocContext,
     buildMessages,
     buildWorkflowStore,
     enrichWithPriorEvents,
@@ -152,6 +153,24 @@ projectChatRouter.post("/", requireAuth, async (req, res) => {
         userId,
         db,
     );
+    // Project documents remain the ambient context. Explicitly attached
+    // user-owned Library files/templates are added without moving them into
+    // the project, matching General Assistant attachment semantics.
+    const attachedContext = await buildDocContext(messages, userId, db, chatId);
+    const indexedDocumentIds = new Set(
+        Object.values(docIndex).map((document) => document.document_id),
+    );
+    let attachmentNumber = 0;
+    for (const [sourceSlug, document] of Object.entries(
+        attachedContext.docIndex,
+    )) {
+        if (indexedDocumentIds.has(document.document_id)) continue;
+        const slug = `attachment-${attachmentNumber++}`;
+        docIndex[slug] = document;
+        const storedDocument = attachedContext.docStore.get(sourceSlug);
+        if (storedDocument) docStore.set(slug, storedDocument);
+        indexedDocumentIds.add(document.document_id);
+    }
     const docAvailability = Object.entries(docIndex).map(([doc_id, info]) => ({
         doc_id,
         filename: info.filename,

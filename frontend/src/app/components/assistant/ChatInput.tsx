@@ -53,6 +53,7 @@ import {
     formatUnsupportedDocumentWarning,
     partitionSupportedDocumentFiles,
 } from "@/app/lib/documentUploadValidation";
+import { uploadFilesSequentiallySettled } from "@/app/lib/sequentialUploads";
 
 export interface ChatInputHandle {
     addDoc: (doc: Document) => void;
@@ -214,12 +215,12 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
             if (supported.length === 0) return;
 
             setUploadingFilenames(supported.map((file) => file.name));
-            const results = await Promise.allSettled(
-                supported.map((file) =>
+            const results = await uploadFilesSequentiallySettled(
+                supported,
+                (file) =>
                     projectId
                         ? uploadProjectDocument(projectId, file)
                         : uploadStandaloneDocument(file),
-                ),
             );
             const uploaded = results.flatMap((result) =>
                 result.status === "fulfilled" ? [result.value] : [],
@@ -599,6 +600,7 @@ export const ChatInput = forwardRef<ChatInputHandle, Props>(function ChatInput(
                 externalUploadedDocuments={droppedDocuments}
                 initialTab={docSelectorInitialTab}
                 projectId={projectId}
+                assignSelectedToProject={!projectId}
                 breadcrumb={
                     selectedWorkflow
                         ? ["Assistant", selectedWorkflow.title, "Add Documents"]

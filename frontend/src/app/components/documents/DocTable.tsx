@@ -53,6 +53,7 @@ import {
     partitionSupportedDocumentFiles,
     SUPPORTED_DOCUMENT_ACCEPT,
 } from "@/app/lib/documentUploadValidation";
+import { uploadFilesSequentially } from "@/app/lib/sequentialUploads";
 import {
     DOC_NAME_COL_W,
     DocIcon,
@@ -1061,8 +1062,9 @@ export function DocTable({
         if (supported.length === 0) return;
         setUploadingDroppedFilenames(supported.map((file) => file.name));
         try {
-            const uploaded = await Promise.all(
-                supported.map((file) => operations.uploadDocument(file)),
+            const uploaded = await uploadFilesSequentially(
+                supported,
+                (file) => operations.uploadDocument(file),
             );
             handleDocsSelected(uploaded);
         } catch (err) {

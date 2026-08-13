@@ -23,7 +23,7 @@ import {
   loadActiveVersion,
 } from "../lib/documentVersions";
 import { ensureDocAccess } from "../lib/access";
-import { singleFileUpload } from "../lib/upload";
+import { readUploadedFile, singleFileUpload } from "../lib/upload";
 import {
   ALLOWED_DOCUMENT_TYPES,
   ALLOWED_DOCUMENT_TYPES_LABEL,
@@ -612,6 +612,7 @@ documentsRouter.post(
         detail: `Unsupported file type: ${suffix}. Allowed: ${ALLOWED_DOCUMENT_TYPES_LABEL}`,
       });
     }
+    const content = await readUploadedFile(file);
 
     // Peg the new version into a predictable /versions/:id path under the
     // existing document folder so ops can spot the history in storage.
@@ -626,9 +627,9 @@ documentsRouter.post(
     try {
       await uploadFile(
         key,
-        file.buffer.buffer.slice(
-          file.buffer.byteOffset,
-          file.buffer.byteOffset + file.buffer.byteLength,
+        content.buffer.slice(
+          content.byteOffset,
+          content.byteOffset + content.byteLength,
         ) as ArrayBuffer,
         contentType,
       );
@@ -645,7 +646,7 @@ documentsRouter.post(
     let pdfStoragePath: string | null = null;
     if (shouldConvertToPdf(suffix)) {
       try {
-        const pdfBuf = await docxToPdf(file.buffer);
+        const pdfBuf = await docxToPdf(content);
         const pdfKey = `converted-pdfs/${userId}/${documentId}/${versionSlug}.pdf`;
         await uploadFile(
           pdfKey,
@@ -667,9 +668,9 @@ documentsRouter.post(
       pdfStoragePath = key;
     }
 
-    const rawBuf = file.buffer.buffer.slice(
-      file.buffer.byteOffset,
-      file.buffer.byteOffset + file.buffer.byteLength,
+    const rawBuf = content.buffer.slice(
+      content.byteOffset,
+      content.byteOffset + content.byteLength,
     ) as ArrayBuffer;
     const pageCount = suffix === "pdf" ? await countPdfPages(rawBuf) : null;
 
@@ -702,9 +703,9 @@ documentsRouter.post(
         version_number: nextVersionNumber,
         filename: requestedFilename,
         file_type: suffix,
-        size_bytes: file.buffer.byteLength,
+        size_bytes: content.byteLength,
         page_count: pageCount,
-        content_sha256: contentSha256(file.buffer),
+        content_sha256: contentSha256(content),
       })
       .select("id, version_number, source, created_at, filename")
       .single();
@@ -830,6 +831,7 @@ documentsRouter.put(
         detail: `Uploaded file type (${suffix}) does not match version type (${target.file_type}).`,
       });
     }
+    const content = await readUploadedFile(file);
 
     const versionSlug = crypto.randomUUID().replace(/-/g, "");
     const key = versionStorageKey(
@@ -843,9 +845,9 @@ documentsRouter.put(
     try {
       await uploadFile(
         key,
-        file.buffer.buffer.slice(
-          file.buffer.byteOffset,
-          file.buffer.byteOffset + file.buffer.byteLength,
+        content.buffer.slice(
+          content.byteOffset,
+          content.byteOffset + content.byteLength,
         ) as ArrayBuffer,
         contentType,
       );
@@ -859,7 +861,7 @@ documentsRouter.put(
     let pdfStoragePath: string | null = null;
     if (shouldConvertToPdf(suffix)) {
       try {
-        const pdfBuf = await docxToPdf(file.buffer);
+        const pdfBuf = await docxToPdf(content);
         const pdfKey = `converted-pdfs/${userId}/${documentId}/${versionSlug}.pdf`;
         await uploadFile(
           pdfKey,
@@ -880,9 +882,9 @@ documentsRouter.put(
       pdfStoragePath = key;
     }
 
-    const rawBuf = file.buffer.buffer.slice(
-      file.buffer.byteOffset,
-      file.buffer.byteOffset + file.buffer.byteLength,
+    const rawBuf = content.buffer.slice(
+      content.byteOffset,
+      content.byteOffset + content.byteLength,
     ) as ArrayBuffer;
     const pageCount = suffix === "pdf" ? await countPdfPages(rawBuf) : null;
     const requestedFilename =
@@ -898,9 +900,9 @@ documentsRouter.put(
         pdf_storage_path: pdfStoragePath,
         filename: requestedFilename,
         file_type: suffix,
-        size_bytes: file.buffer.byteLength,
+        size_bytes: content.byteLength,
         page_count: pageCount,
-        content_sha256: contentSha256(file.buffer),
+        content_sha256: contentSha256(content),
         created_at: uploadedAt,
       })
       .eq("id", versionId)
@@ -1335,7 +1337,7 @@ export async function handleDocumentUpload(
         detail: `Unsupported file type: ${suffix}. Allowed: ${ALLOWED_DOCUMENT_TYPES_LABEL}`,
       });
 
-  const content = file.buffer;
+  const content = await readUploadedFile(file);
   const { data: doc, error: insertErr } = await db
     .from("documents")
     .insert({

@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Check, Loader2, Upload, X } from "lucide-react";
 import { SearchBar } from "@/app/components/ui/search-bar";
 import { getProject, uploadProjectDocument } from "@/app/lib/mikeApi";
+import { uploadFilesSequentially } from "@/app/lib/sequentialUploads";
 import type { Document } from "../shared/types";
 import { DocFileIcon } from "../shared/FileDirectory";
 import { VersionChip } from "../shared/VersionChip";
@@ -99,8 +100,9 @@ export function AddProjectDocsModal({
         if (!files.length) return;
         setUploading(true);
         try {
-            const uploaded = await Promise.all(
-                files.map((f) => uploadProjectDocument(projectId, f)),
+            const uploaded = await uploadFilesSequentially(
+                files,
+                (f) => uploadProjectDocument(projectId, f),
             );
             setDocs((prev) => [...uploaded, ...prev]);
             setSelectedIds((prev) => {

@@ -33,6 +33,7 @@ import {
     moveDocumentToFolder,
     moveSubfolderToFolder,
 } from "@/app/lib/mikeApi";
+import { uploadFilesSequentially } from "@/app/lib/sequentialUploads";
 import { useAssistantChat } from "@/app/hooks/useAssistantChat";
 import { useChatHistoryContext } from "@/app/contexts/ChatHistoryContext";
 import { UserMessage } from "@/app/components/assistant/UserMessage";
@@ -664,8 +665,9 @@ export default function ProjectAssistantChatPage({ params }: Props) {
         if (!files.length) return;
         setUploading(true);
         try {
-            const uploaded = await Promise.all(
-                files.map((f) => uploadProjectDocument(projectId, f)),
+            const uploaded = await uploadFilesSequentially(
+                files,
+                (f) => uploadProjectDocument(projectId, f),
             );
             setProject((prev) => {
                 if (!prev) return prev;
@@ -1400,7 +1402,6 @@ export default function ProjectAssistantChatPage({ params }: Props) {
                                 onSubmit={handleSubmit}
                                 onCancel={cancel}
                                 isLoading={isResponseLoading}
-                                hideAddDocButton
                                 projectId={projectId}
                                 onDocumentsUploaded={(documents) =>
                                     setProject((prev) =>

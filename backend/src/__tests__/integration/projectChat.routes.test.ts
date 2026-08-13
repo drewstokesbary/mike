@@ -6,11 +6,13 @@ const {
     checkProjectAccess,
     buildMessages,
     buildProjectDocContext,
+    buildDocContext,
 } = vi.hoisted(() => ({
     runLLMStream: vi.fn(),
     checkProjectAccess: vi.fn(),
     buildMessages: vi.fn(),
     buildProjectDocContext: vi.fn(),
+    buildDocContext: vi.fn(),
 }));
 
 function makeQuery() {
@@ -67,6 +69,7 @@ vi.mock("../../lib/chat", async (importOriginal) => {
         ...actual,
         buildProjectDocContext: (...args: unknown[]) =>
             buildProjectDocContext(...args),
+        buildDocContext: (...args: unknown[]) => buildDocContext(...args),
         enrichWithPriorEvents: vi.fn(async (messages: unknown) => messages),
         buildWorkflowStore: vi.fn(async () => new Map()),
         buildMessages: (...args: unknown[]) => buildMessages(...args),
@@ -107,6 +110,10 @@ describe("POST /projects/:projectId/chat", () => {
             docStore: new Map(),
             folderPaths: new Map(),
         });
+        buildDocContext.mockResolvedValue({
+            docIndex: {},
+            docStore: new Map(),
+        });
         runLLMStream.mockResolvedValue({
             fullText: "",
             events: [],
@@ -143,6 +150,61 @@ describe("POST /projects/:projectId/chat", () => {
         expect(res.headers["content-type"]).toContain("text/event-stream");
         expect(res.text).toContain('"type":"chat_id"');
         expect(runLLMStream).toHaveBeenCalledTimes(1);
+    });
+
+    it("adds an attached Library document without moving it into the project", async () => {
+        buildDocContext.mockResolvedValue({
+            docIndex: {
+                "doc-0": {
+                    document_id: "template-1",
+                    filename: "Engagement Letter.docx",
+                },
+            },
+            docStore: new Map([
+                [
+                    "doc-0",
+                    {
+                        storage_path: "templates/engagement-letter.docx",
+                        file_type: "docx",
+                        filename: "Engagement Letter.docx",
+                    },
+                ],
+            ]),
+        });
+
+        const res = await request(app)
+            .post("/projects/p1/chat")
+            .set("Authorization", "Bearer test")
+            .send({
+                messages: [
+                    {
+                        role: "user",
+                        content: "Draft from this template",
+                        files: [
+                            {
+                                filename: "Engagement Letter.docx",
+                                document_id: "template-1",
+                            },
+                        ],
+                    },
+                ],
+                attached_documents: [
+                    {
+                        filename: "Engagement Letter.docx",
+                        document_id: "template-1",
+                    },
+                ],
+            });
+
+        expect(res.status).toBe(200);
+        expect(runLLMStream.mock.calls[0][0].docIndex).toMatchObject({
+            "attachment-0": {
+                document_id: "template-1",
+                filename: "Engagement Letter.docx",
+            },
+        });
+        expect(runLLMStream.mock.calls[0][0].docStore.get("attachment-0"))
+            .toMatchObject({ storage_path: "templates/engagement-letter.docx" });
     });
 
     it("normalizes validated request fields before using them", async () => {

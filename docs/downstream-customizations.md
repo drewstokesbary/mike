@@ -82,6 +82,59 @@ intentionally differs from `upstream/main`.
 - Validation: the focused CourtListener registration test, backend TypeScript
   build, and backend test suite.
 
+### Memory-bounded document uploads and Office conversion
+
+- Frontend files: `frontend/src/app/lib/sequentialUploads.ts` and narrow uses
+  at every multi-file document-upload surface.
+- Backend files: `backend/src/lib/upload.ts`, `backend/src/lib/convert.ts`, and
+  upload handlers that consume the shared disk-backed upload helper.
+- Invariant: a browser uploads a selected batch one file at a time; incoming
+  multipart bodies are staged in the operating system's temporary directory
+  and removed when the response completes; and each backend process permits at
+  most one LibreOffice conversion at a time.
+- Reason: concurrent in-memory uploads and concurrent LibreOffice processes can
+  exceed the 512 MiB memory allowance of the Render Starter deployment even
+  when the selected files themselves are small.
+- Operational boundary: the conversion lock is process-local. If the service
+  is scaled to multiple instances, each instance may run one conversion. Raw
+  storage upload and document conversion still read one staged file into a
+  buffer because the existing storage and conversion adapters require bytes;
+  disk-backed multipart staging removes the additional request-body buffer but
+  is not an end-to-end streaming pipeline.
+- Upstream interaction: retire the frontend helper if upstream serializes or
+  bounds batch uploads. Reshape around any upstream upload job/worker,
+  streaming-storage, or conversion-queue abstraction rather than retaining a
+  parallel queue. Preserve the behavioral concurrency limits unless deployment
+  capacity is explicitly made configurable.
+- Validation: sequential-helper tests, LibreOffice lock tests, upload route
+  tests, full frontend/backend suites and builds, plus a multi-DOCX upload on a
+  512 MiB deployment while monitoring memory and restart events.
+
+### Library attachments in Project Assistant
+
+- Frontend files: the existing shared `ChatInput` and `AddDocumentsModal`, with
+  the Project Assistant no longer hiding the add-document control.
+- Backend file: a narrow context merge in `backend/src/routes/projectChat.ts`
+  using the existing General Assistant `buildDocContext` authorization path.
+- Invariant: Project Assistant users can explicitly attach accessible Library
+  Files and Templates using the same Files/Templates/Projects picker as General
+  Assistant. A Library selection remains in the Library and is chat context; it
+  is not moved into the project. New files uploaded from a Project Assistant
+  picker are project documents. Project documents remain ambient context.
+- Reason: Library Templates are reusable references and should not need to be
+  duplicated into, or removed from the Library for, every matter.
+- Authorization boundary: non-project attachments are admitted through
+  `buildDocContext`, which currently exposes ready documents owned by the user.
+  Do not broaden this in the UI or bypass backend document authorization.
+- Upstream interaction: retire this delta if upstream Project Assistant gains
+  equivalent non-destructive Library attachment support. If upstream adds a
+  unified context/attachment service, reshape the context merge and picker
+  around it rather than maintaining separate project-specific behavior.
+- Validation: Project Chat route tests must show that an attached Library
+  template enters `docIndex`/`docStore` without a project-assignment mutation;
+  run frontend/backend suites and builds and manually draft from a Template in
+  a Project Assistant chat.
+
 ## Deployment configuration note: Supabase Storage
 
 - CABW project `orzoqismohtjgdjhuypy` has a private `mike` bucket with 227
@@ -200,6 +253,8 @@ invariant, integration strategy, or validation changes.
 - Feature integration commits: `5b71d25` (chat movement) and `a27f111`
   (Anthropic web research).
 - Effective code delta after reconciliation: Render binding, Anthropic caching
-  and native web research, and creator-controlled chat movement. Storage code
-  matches upstream; Supabase is selected solely through deployment values in
-  the upstream-compatible `R2_*` variables.
+  and native web research, creator-controlled chat movement, CourtListener tool
+  registration, memory-bounded uploads/conversion, and non-destructive Library
+  attachments in Project Assistant. Storage-provider code matches upstream;
+  Supabase is selected solely through deployment values in the
+  upstream-compatible `R2_*` variables.

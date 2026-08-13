@@ -9,6 +9,7 @@ import {
     uploadProjectDocument,
     uploadStandaloneDocument,
 } from "@/app/lib/mikeApi";
+import { uploadFilesSequentially } from "@/app/lib/sequentialUploads";
 import { FileDirectory } from "../shared/FileDirectory";
 import { Modal } from "../modals/Modal";
 import { ModalFieldLabel } from "../modals/ModalFieldLabel";
@@ -183,12 +184,12 @@ export function NewTRModal({
         if (!files.length) return;
         setUploading(true);
         try {
-            const uploaded = await Promise.all(
-                files.map((f) =>
+            const uploaded = await uploadFilesSequentially(
+                files,
+                (f) =>
                     underProject && selectedProjectId
                         ? uploadProjectDocument(selectedProjectId, f)
                         : uploadStandaloneDocument(f),
-                ),
             );
             if (underProject && selectedProjectId) {
                 setProjectDocs((prev) => [...uploaded, ...prev]);

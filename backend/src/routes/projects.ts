@@ -20,7 +20,7 @@ import {
 } from "../lib/storage";
 import { docxToPdf, convertedPdfKey } from "../lib/convert";
 import { checkProjectAccess } from "../lib/access";
-import { singleFileUpload } from "../lib/upload";
+import { readUploadedFile, singleFileUpload } from "../lib/upload";
 import { deleteUserProjects } from "../lib/userDataCleanup";
 import {
   ALLOWED_DOCUMENT_TYPES,
@@ -1003,7 +1003,7 @@ export async function handleDocumentUpload(
         detail: `Unsupported file type: ${suffix}. Allowed: ${ALLOWED_DOCUMENT_TYPES_LABEL}`,
       });
 
-  const content = file.buffer;
+  const content = await readUploadedFile(file);
   const { data: doc, error: insertErr } = await db
     .from("documents")
     .insert({
