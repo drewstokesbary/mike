@@ -66,25 +66,30 @@ intentionally differs from `upstream/main`.
 - Validation: SDK protocol unit tests, web-citation UI tests, TypeScript builds,
   and backend/frontend suites. Re-check tool versions when upgrading the SDK.
 
-### Claude stalled tool-turn recovery
+### Claude incomplete tool-turn and response recovery
 
 - Files: `backend/src/lib/llm/claude.ts`, a matching core prompt rule, and
   focused adapter detection tests.
-- Invariant: when Claude ends normally with a short, high-confidence promise to
-  read/search/use an available tool but emits no `tool_use`, Mike automatically
-  continues the provider conversation once. If Claude repeats the stall, Mike
-  emits a visible error instead of silently persisting an incomplete answer.
+- Invariant: Mike automatically continues the provider conversation once when
+  Claude (a) ends normally with a short, high-confidence promise to
+  read/search/use an available tool but emits no `tool_use`, (b) reaches
+  `max_tokens`, or (c) returns an empty `end_turn` after tools ran. If Claude
+  repeats an incomplete outcome, Mike emits a visible error instead of silently
+  persisting an incomplete answer.
 - Reason: production project-chat turns twice ended after “Let me read the PDF
-  in full” with `stop_reason=end_turn`, no tool event, and no provider error.
+  in full” with no tool event; after initial recovery, a 52-page review then
+  read the document but ended after adaptive thinking with no final prose.
 - Observability: recovery emits a privacy-safe Render warning containing only
-  model, iteration, and stop reason—not prompts or document contents.
+  model, iteration, stop/recovery reason, and completed-tool count—not prompts
+  or document contents.
 - Upstream interaction: retire this recovery if upstream or Anthropic provides
   equivalent stalled-tool handling. Reshape it around any upstream provider
   continuation/retry abstraction; do not broaden the heuristic to generic short
   answers or ordinary offers of future assistance.
-- Validation: focused phrase-boundary tests, Claude adapter tests when provider
-  mocks are available, backend suite/build, and a production project-chat test
-  that requires reading an attached document before answering.
+- Validation: focused phrase-boundary and stop-reason tests, Claude adapter
+  tests when provider mocks are available, backend suite/build, and a
+  production project-chat test that requires reading an attached document
+  before answering.
 
 ### CourtListener case-law search registration
 
@@ -215,7 +220,7 @@ Run from the canonical checkout at `/Users/drew/Developer/mike`:
 9. Review newly added database migrations and apply unapplied migrations in
    filename order before deploying code that depends on them.
 10. Run backend and frontend builds and tests, validate Compose configuration,
-   and build the backend Docker image when Docker is available.
+    and build the backend Docker image when Docker is available.
 11. Update every affected ledger entry and add a reconciliation record using the
     template below before committing.
 12. Commit the merge, push `main`, and monitor Render deployment and health.

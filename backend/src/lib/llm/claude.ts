@@ -36,6 +36,7 @@ const CONVERSATION_PROMPT_CACHE_CONTROL = {
   ttl: "1h",
 } as const;
 const MAX_STALLED_TOOL_RECOVERIES = 1;
+const MAX_INCOMPLETE_RESPONSE_RECOVERIES = 1;
 const TOOL_INTENT_AT_END =
   /(?:^|[.!?]\s+)(?:let me|i['’]?ll|i will)(?:\s+now)?\s+(?:read|review|inspect|analy[sz]e|check|search|fetch|open|look\s+up|examine|compare|retrieve)\b[\s\S]{0,500}$/i;
 
@@ -47,7 +48,27 @@ const TOOL_INTENT_AT_END =
  */
 export function endsWithUnperformedToolIntent(text: string): boolean {
   const trimmed = text.trim();
-  return trimmed.length > 0 && trimmed.length <= 800 && TOOL_INTENT_AT_END.test(trimmed);
+  return (
+    trimmed.length > 0 &&
+    trimmed.length <= 800 &&
+    TOOL_INTENT_AT_END.test(trimmed)
+  );
+}
+
+export function incompleteResponseReason(args: {
+  stopReason: string | null;
+  turnText: string;
+  completedToolRounds: number;
+}): "max_tokens" | "empty_after_tools" | null {
+  if (args.stopReason === "max_tokens") return "max_tokens";
+  if (
+    args.stopReason === "end_turn" &&
+    args.completedToolRounds > 0 &&
+    !args.turnText.trim()
+  ) {
+    return "empty_after_tools";
+  }
+  return null;
 }
 
 function apiKey(override?: string | null): string {
@@ -151,6 +172,8 @@ export async function streamClaude(
   let fullText = "";
   let webCitations: WebCitation[] = [];
   let stalledToolRecoveries = 0;
+  let incompleteResponseRecoveries = 0;
+  let completedToolRounds = 0;
   const rawStreamRecorder = createRawLlmStreamRecorder({
     provider: "claude",
     model,
@@ -280,8 +303,9 @@ export async function streamClaude(
       }
 
       const turnText = assistantBlocks
-        .filter((block): block is Extract<ContentBlock, { type: "text" }> =>
-          block.type === "text",
+        .filter(
+          (block): block is Extract<ContentBlock, { type: "text" }> =>
+            block.type === "text",
         )
         .map((block) => block.text)
         .join("");
@@ -313,11 +337,46 @@ export async function streamClaude(
         continue;
       }
 
+      const incompleteReason = incompleteResponseReason({
+        stopReason,
+        turnText,
+        completedToolRounds,
+      });
+      if (incompleteReason) {
+        if (
+          incompleteResponseRecoveries >= MAX_INCOMPLETE_RESPONSE_RECOVERIES
+        ) {
+          throw new Error(
+            incompleteReason === "max_tokens"
+              ? "Claude reached its response limit before completing the answer. Please retry with a narrower request or fewer documents."
+              : "Claude stopped after using its tools without producing a final answer. Please retry the request.",
+          );
+        }
+        incompleteResponseRecoveries += 1;
+        console.warn("[claude] continuing incomplete response", {
+          model,
+          iteration: iter,
+          stopReason,
+          reason: incompleteReason,
+          completedToolRounds,
+        });
+        messages.push({ role: "assistant", content: assistantBlocks });
+        messages.push({
+          role: "user",
+          content:
+            incompleteReason === "max_tokens"
+              ? "Continue from where you stopped and complete the final answer now. Do not repeat material already provided."
+              : "Complete the user's requested final answer now using the tool results you already obtained.",
+        });
+        continue;
+      }
+
       if (stopReason !== "tool_use" || !toolCalls.length || !runTools) {
         break;
       }
 
       const results = await runTools(toolCalls);
+      completedToolRounds += 1;
       throwIfAborted(params.abortSignal);
 
       // Record the assistant turn (preserving the original content blocks,
