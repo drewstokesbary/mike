@@ -35,6 +35,20 @@ const CONVERSATION_PROMPT_CACHE_CONTROL = {
   type: "ephemeral",
   ttl: "1h",
 } as const;
+const MAX_STALLED_TOOL_RECOVERIES = 1;
+const TOOL_INTENT_AT_END =
+  /(?:^|[.!?]\s+)(?:let me|i['’]?ll|i will)(?:\s+now)?\s+(?:read|review|inspect|analy[sz]e|check|search|fetch|open|look\s+up|examine|compare|retrieve)\b[\s\S]{0,500}$/i;
+
+/**
+ * Claude occasionally ends a turn immediately after announcing a tool action
+ * (for example, "Let me read the PDF in full.") without emitting tool_use.
+ * Keep this deliberately narrow so ordinary answers and offers of future help
+ * are never auto-continued.
+ */
+export function endsWithUnperformedToolIntent(text: string): boolean {
+  const trimmed = text.trim();
+  return trimmed.length > 0 && trimmed.length <= 800 && TOOL_INTENT_AT_END.test(trimmed);
+}
 
 function apiKey(override?: string | null): string {
   const key = override?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || "";
@@ -136,6 +150,7 @@ export async function streamClaude(
   const messages: NativeMessage[] = toNativeMessages(params.messages);
   let fullText = "";
   let webCitations: WebCitation[] = [];
+  let stalledToolRecoveries = 0;
   const rawStreamRecorder = createRawLlmStreamRecorder({
     provider: "claude",
     model,
@@ -261,6 +276,40 @@ export async function streamClaude(
 
       if (stopReason === "pause_turn") {
         messages.push({ role: "assistant", content: assistantBlocks });
+        continue;
+      }
+
+      const turnText = assistantBlocks
+        .filter((block): block is Extract<ContentBlock, { type: "text" }> =>
+          block.type === "text",
+        )
+        .map((block) => block.text)
+        .join("");
+      const stalledBeforeTool =
+        stopReason === "end_turn" &&
+        toolCalls.length === 0 &&
+        !!runTools &&
+        claudeTools.length > 0 &&
+        endsWithUnperformedToolIntent(turnText);
+
+      if (stalledBeforeTool) {
+        if (stalledToolRecoveries >= MAX_STALLED_TOOL_RECOVERIES) {
+          throw new Error(
+            "Claude stopped before performing the document or research action it announced. Please retry the request.",
+          );
+        }
+        stalledToolRecoveries += 1;
+        console.warn("[claude] recovering stalled tool-intent turn", {
+          model,
+          iteration: iter,
+          stopReason,
+        });
+        messages.push({ role: "assistant", content: assistantBlocks });
+        messages.push({
+          role: "user",
+          content:
+            "Continue with the action you just described. Use the available tool now, then complete the user's request. Do not merely restate the plan.",
+        });
         continue;
       }
 

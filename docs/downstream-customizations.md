@@ -66,6 +66,26 @@ intentionally differs from `upstream/main`.
 - Validation: SDK protocol unit tests, web-citation UI tests, TypeScript builds,
   and backend/frontend suites. Re-check tool versions when upgrading the SDK.
 
+### Claude stalled tool-turn recovery
+
+- Files: `backend/src/lib/llm/claude.ts`, a matching core prompt rule, and
+  focused adapter detection tests.
+- Invariant: when Claude ends normally with a short, high-confidence promise to
+  read/search/use an available tool but emits no `tool_use`, Mike automatically
+  continues the provider conversation once. If Claude repeats the stall, Mike
+  emits a visible error instead of silently persisting an incomplete answer.
+- Reason: production project-chat turns twice ended after “Let me read the PDF
+  in full” with `stop_reason=end_turn`, no tool event, and no provider error.
+- Observability: recovery emits a privacy-safe Render warning containing only
+  model, iteration, and stop reason—not prompts or document contents.
+- Upstream interaction: retire this recovery if upstream or Anthropic provides
+  equivalent stalled-tool handling. Reshape it around any upstream provider
+  continuation/retry abstraction; do not broaden the heuristic to generic short
+  answers or ordinary offers of future assistance.
+- Validation: focused phrase-boundary tests, Claude adapter tests when provider
+  mocks are available, backend suite/build, and a production project-chat test
+  that requires reading an attached document before answering.
+
 ### CourtListener case-law search registration
 
 - File: `backend/src/lib/chat/tools/courtlistenerTools.ts`.
