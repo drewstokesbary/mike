@@ -15,7 +15,8 @@ selector-breaking UI tweaks — is caught within a day), the `e2e / playwright`
 job:
 
 1. installs the root (Playwright), `backend/`, and `frontend/` dependencies;
-2. boots **MinIO** (S3-compatible object storage — several specs upload documents);
+2. boots **RustFS** (the same S3-compatible object storage used by Mike's local
+   Docker stack — several specs upload documents);
 3. boots **local Supabase** (Auth + Postgres) via the Supabase CLI, loads
    `backend/schema.sql`, then applies every dated migration in `backend/migrations/`
    on top. `schema.sql` is meant to be the latest shape but in practice lags the

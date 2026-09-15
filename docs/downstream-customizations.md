@@ -6,6 +6,20 @@ intentionally differs from `upstream/main`.
 
 ## Current intentional differences
 
+### Playwright CI storage parity
+
+- Files: `.github/workflows/e2e.yml` and `docs/e2e-ci.md`.
+- Invariant: the end-to-end job boots RustFS with the same image, S3 endpoint,
+  credentials, and bucket as Mike's local Docker stack before document-upload
+  specs run; an unready storage service fails setup visibly.
+- Reason: the pinned MinIO Docker Hub image became unavailable in September
+  2026, causing scheduled runs to fail before Playwright could start.
+- Upstream interaction: retire this difference if upstream adopts a working
+  storage fixture. Prefer the storage service already maintained in Mike's
+  local Docker stack over a parallel CI-only implementation.
+- Validation: workflow YAML parse, S3 bucket creation, and a complete GitHub
+  Actions end-to-end run that reaches Playwright.
+
 ### Render network binding
 
 - File: `backend/src/index.ts`
