@@ -71,6 +71,21 @@ export function incompleteResponseReason(args: {
   return null;
 }
 
+export function claudeTurnProtocolAction(args: {
+  stopReason: string | null;
+  toolCallCount: number;
+  turnText: string;
+  completedToolRounds: number;
+}): "run_tools" | "continue_pause_turn" | "recover_incomplete" | "finish" {
+  // Anthropic requires every client tool_use block to be followed immediately
+  // by its tool_result. A tool call can accompany max_tokens or pause_turn, so
+  // the content blocks—not only stop_reason—must control this decision.
+  if (args.toolCallCount > 0) return "run_tools";
+  if (args.stopReason === "pause_turn") return "continue_pause_turn";
+  if (incompleteResponseReason(args)) return "recover_incomplete";
+  return "finish";
+}
+
 function apiKey(override?: string | null): string {
   const key = override?.trim() || process.env.ANTHROPIC_API_KEY?.trim() || "";
   if (!key) {
@@ -297,11 +312,6 @@ export async function streamClaude(
         }
       }
 
-      if (stopReason === "pause_turn") {
-        messages.push({ role: "assistant", content: assistantBlocks });
-        continue;
-      }
-
       const turnText = assistantBlocks
         .filter(
           (block): block is Extract<ContentBlock, { type: "text" }> =>
@@ -309,6 +319,43 @@ export async function streamClaude(
         )
         .map((block) => block.text)
         .join("");
+      const protocolAction = claudeTurnProtocolAction({
+        stopReason,
+        toolCallCount: toolCalls.length,
+        turnText,
+        completedToolRounds,
+      });
+
+      if (protocolAction === "run_tools") {
+        if (!runTools) {
+          throw new Error(
+            "Claude requested a client tool, but no tool runner is configured.",
+          );
+        }
+
+        const results = await runTools(toolCalls);
+        completedToolRounds += 1;
+        throwIfAborted(params.abortSignal);
+
+        // Anthropic requires this assistant tool_use turn and the corresponding
+        // user tool_result turn to be adjacent, regardless of stop_reason.
+        messages.push({ role: "assistant", content: assistantBlocks });
+        messages.push({
+          role: "user",
+          content: results.map((r) => ({
+            type: "tool_result",
+            tool_use_id: r.tool_use_id,
+            content: r.content,
+          })),
+        });
+        continue;
+      }
+
+      if (protocolAction === "continue_pause_turn") {
+        messages.push({ role: "assistant", content: assistantBlocks });
+        continue;
+      }
+
       const stalledBeforeTool =
         stopReason === "end_turn" &&
         toolCalls.length === 0 &&
@@ -337,11 +384,14 @@ export async function streamClaude(
         continue;
       }
 
-      const incompleteReason = incompleteResponseReason({
-        stopReason,
-        turnText,
-        completedToolRounds,
-      });
+      const incompleteReason =
+        protocolAction === "recover_incomplete"
+          ? incompleteResponseReason({
+              stopReason,
+              turnText,
+              completedToolRounds,
+            })
+          : null;
       if (incompleteReason) {
         if (
           incompleteResponseRecoveries >= MAX_INCOMPLETE_RESPONSE_RECOVERIES
@@ -371,26 +421,7 @@ export async function streamClaude(
         continue;
       }
 
-      if (stopReason !== "tool_use" || !toolCalls.length || !runTools) {
-        break;
-      }
-
-      const results = await runTools(toolCalls);
-      completedToolRounds += 1;
-      throwIfAborted(params.abortSignal);
-
-      // Record the assistant turn (preserving the original content blocks,
-      // which Claude requires on the follow-up) and the user turn that
-      // carries the tool_result blocks.
-      messages.push({ role: "assistant", content: assistantBlocks });
-      messages.push({
-        role: "user",
-        content: results.map((r) => ({
-          type: "tool_result",
-          tool_use_id: r.tool_use_id,
-          content: r.content,
-        })),
-      });
+      break;
     }
 
     await rawStreamRecorder?.flush("completed");

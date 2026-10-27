@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  claudeTurnProtocolAction,
   endsWithUnperformedToolIntent,
   incompleteResponseReason,
 } from "./claude";
@@ -54,5 +55,32 @@ describe("Claude incomplete response detection", () => {
     { stopReason: "tool_use", turnText: "", completedToolRounds: 1 },
   ])("accepts a complete or still-active turn: %o", (args) => {
     expect(incompleteResponseReason(args)).toBeNull();
+  });
+});
+
+describe("Claude tool-result protocol ordering", () => {
+  it.each(["tool_use", "max_tokens", "pause_turn"])(
+    "runs client tools before handling a %s stop reason",
+    (stopReason) => {
+      expect(
+        claudeTurnProtocolAction({
+          stopReason,
+          toolCallCount: 1,
+          turnText: "",
+          completedToolRounds: 0,
+        }),
+      ).toBe("run_tools");
+    },
+  );
+
+  it("retains max-token recovery when no client tool call is pending", () => {
+    expect(
+      claudeTurnProtocolAction({
+        stopReason: "max_tokens",
+        toolCallCount: 0,
+        turnText: "Partial answer",
+        completedToolRounds: 1,
+      }),
+    ).toBe("recover_incomplete");
   });
 });

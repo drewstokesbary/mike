@@ -89,10 +89,16 @@ intentionally differs from `upstream/main`.
   read/search/use an available tool but emits no `tool_use`, (b) reaches
   `max_tokens`, or (c) returns an empty `end_turn` after tools ran. If Claude
   repeats an incomplete outcome, Mike emits a visible error instead of silently
-  persisting an incomplete answer.
+  persisting an incomplete answer. When an assistant response contains a client
+  `tool_use`, Mike always executes it and places its `tool_result` immediately
+  after that assistant turn—even if Anthropic reports `max_tokens` or
+  `pause_turn` rather than `tool_use` as the stop reason.
 - Reason: production project-chat turns twice ended after “Let me read the PDF
   in full” with no tool event; after initial recovery, a 52-page review then
-  read the document but ended after adaptive thinking with no final prose.
+  read the document but ended after adaptive thinking with no final prose. A
+  later Word-drafting request exposed that recovery previously inserted a
+  continuation prompt between `tool_use` and `tool_result`, which Anthropic
+  rejects as an invalid message sequence.
 - Observability: recovery emits a privacy-safe Render warning containing only
   model, iteration, stop/recovery reason, and completed-tool count—not prompts
   or document contents.
@@ -100,8 +106,9 @@ intentionally differs from `upstream/main`.
   equivalent stalled-tool handling. Reshape it around any upstream provider
   continuation/retry abstraction; do not broaden the heuristic to generic short
   answers or ordinary offers of future assistance.
-- Validation: focused phrase-boundary and stop-reason tests, Claude adapter
-  tests when provider mocks are available, backend suite/build, and a
+- Validation: focused phrase-boundary, stop-reason, and mixed
+  tool-use/stop-reason ordering tests; Claude adapter tests when provider mocks
+  are available; backend suite/build; and a
   production project-chat test that requires reading an attached document
   before answering.
 
